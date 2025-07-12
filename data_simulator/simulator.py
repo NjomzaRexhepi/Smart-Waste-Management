@@ -1,23 +1,32 @@
 import time
 import json
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from kafka import KafkaProducer
-from .sensors import UltrasonicSensor, TemperatureSensor, GPSSensor, CameraSensor
-from .data_generators import generate_bin_data
+from sensors import UltrasonicSensor, TemperatureSensor, GPSSensor, CameraSensor
+from data_generators import generate_bin_data, generate_citizen_report
 
 
 class WasteBinSimulator:
     def __init__(self, kafka_brokers='localhost:9092', kafka_topic='waste-sensor-data'):
         self.bins = generate_bin_data(100)  # Generate 100 bins
+        self.last_capture = {}              # Initialize early
         self.sensors = self._initialize_sensors()
         self.camera_interval = timedelta(minutes=15)
-        self.last_capture = {}
-        self.producer = KafkaProducer(
-            bootstrap_servers=kafka_brokers.split(','),
-            value_serializer=lambda v: json.dumps(v).encode('utf-8')
-        )
         self.kafka_topic = kafka_topic
+
+        print(f"🛰️  Connecting to Kafka at {kafka_brokers}...")
+        try:
+            self.producer = KafkaProducer(
+                bootstrap_servers='192.168.1.11:9092',
+                value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+                retries=5
+            )
+            print("✅ Connected to Kafka!")
+        except Exception as e:
+            print(f"❌ Failed to connect to Kafka: {e}")
+            raise
+
 
     def _initialize_sensors(self):
         """Create sensor instances for each bin"""
@@ -37,21 +46,100 @@ class WasteBinSimulator:
         return sensors
 
     def _generate_sensor_readings(self, bin_id):
-        """Collect data from all sensors for a bin"""
-        readings = []
+        """Collect enriched data from all sensors for a bin"""
+        gps_reading = self.sensors[bin_id]["gps"].measure()
+        ultrasonic_reading = self.sensors[bin_id]["ultrasonic"].measure()
+        temperature_reading = self.sensors[bin_id]["temperature"].measure()
+        fill_level = ultrasonic_reading.value
 
-        # Get core sensors
-        readings.append(self.sensors[bin_id]["ultrasonic"].measure())
-        fill_level = readings[-1].value
-        readings.append(self.sensors[bin_id]["temperature"].measure())
-        readings.append(self.sensors[bin_id]["gps"].measure())
+        # Generate additional synthetic data
+        humidity = round(random.uniform(10, 90), 1)
+        pressure = round(random.uniform(980, 1050), 1)
+        sound_level = round(random.uniform(30, 100), 1)
+        co2_ppm = round(random.uniform(400, 2000))
+        battery = round(random.uniform(20, 100), 2)
+        ping = round(random.uniform(10, 300), 1)
+        motion = random.choice([True, False])
+        status = random.choice(["OK", "ERROR", "OFFLINE"])
+
+        timestamp = datetime.utcnow().isoformat()
+
+        readings = [
+            {
+                "timestamp": timestamp,
+                "bin_id": bin_id,
+                "sensor_type": "ultrasonic",
+                "measurement": fill_level
+            },
+            {
+                "timestamp": timestamp,
+                "bin_id": bin_id,
+                "sensor_type": "temperature",
+                "measurement": temperature_reading.value
+            },
+            {
+                "timestamp": timestamp,
+                "bin_id": bin_id,
+                "sensor_type": "gps",
+                "measurement": gps_reading.value
+            },
+            {
+                "timestamp": timestamp,
+                "bin_id": bin_id,
+                "sensor_type": "humidity",
+                "measurement": humidity
+            },
+            {
+                "timestamp": timestamp,
+                "bin_id": bin_id,
+                "sensor_type": "pressure",
+                "measurement": pressure
+            },
+            {
+                "timestamp": timestamp,
+                "bin_id": bin_id,
+                "sensor_type": "sound_level_db",
+                "measurement": sound_level
+            },
+            {
+                "timestamp": timestamp,
+                "bin_id": bin_id,
+                "sensor_type": "co2_ppm",
+                "measurement": co2_ppm
+            },
+            {
+                "timestamp": timestamp,
+                "bin_id": bin_id,
+                "sensor_type": "battery",
+                "measurement": battery
+            },
+            {
+                "timestamp": timestamp,
+                "bin_id": bin_id,
+                "sensor_type": "ping_ms",
+                "measurement": ping
+            },
+            {
+                "timestamp": timestamp,
+                "bin_id": bin_id,
+                "sensor_type": "motion",
+                "measurement": motion
+            },
+            {
+                "timestamp": timestamp,
+                "bin_id": bin_id,
+                "sensor_type": "status",
+                "measurement": status
+            }
+        ]
 
         # Capture image periodically
         if (datetime.now() - self.last_capture[bin_id]) > self.camera_interval:
-            readings.append(self.sensors[bin_id]["camera"].capture(fill_level))
+            image_reading = self.sensors[bin_id]["camera"].capture(fill_level)
+            readings.append(image_reading.__dict__)
             self.last_capture[bin_id] = datetime.now()
 
-        return [r.__dict__ for r in readings]
+        return readings
 
     def _generate_special_events(self):
         """Create random waste management events"""
@@ -84,19 +172,16 @@ class WasteBinSimulator:
         print(f"Starting waste bin simulator with {len(self.bins)} bins...")
         try:
             while True:
-                # Simulate all bins
                 for bin in self.bins:
                     bin_id = bin['bin_id']
                     sensor_data = self._generate_sensor_readings(bin_id)
                     for reading in sensor_data:
                         self.producer.send(self.kafka_topic, value=reading)
 
-                # Generate special events
                 for event in self._generate_special_events():
                     self.producer.send(self.kafka_topic, value=event)
 
-                # Print status every minute
-                if datetime.now().second < 5:  # Roughly once per minute
+                if datetime.now().second < 5:
                     print(f"{datetime.now().isoformat()} - Sent data for {len(self.bins)} bins")
 
                 time.sleep(interval)
