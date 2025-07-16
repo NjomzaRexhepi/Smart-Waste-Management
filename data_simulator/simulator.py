@@ -9,22 +9,22 @@ from data_generators import generate_bin_data, generate_citizen_report
 
 class WasteBinSimulator:
     def __init__(self, kafka_brokers='localhost:9092', kafka_topic='waste-sensor-data'):
-        self.bins = generate_bin_data(100)  # Generate 100 bins
-        self.last_capture = {}              # Initialize early
+        self.bins = generate_bin_data(100)
+        self.last_capture = {}
         self.sensors = self._initialize_sensors()
         self.camera_interval = timedelta(minutes=15)
         self.kafka_topic = kafka_topic
 
-        print(f"🛰️  Connecting to Kafka at {kafka_brokers}...")
+        print(f"Connecting to Kafka at {kafka_brokers}...")
         try:
             self.producer = KafkaProducer(
                 bootstrap_servers='192.168.1.11:9092',
                 value_serializer=lambda v: json.dumps(v).encode('utf-8'),
                 retries=5
             )
-            print("✅ Connected to Kafka!")
+            print("Connected to Kafka!")
         except Exception as e:
-            print(f"❌ Failed to connect to Kafka: {e}")
+            print(f"Failed to connect to Kafka: {e}")
             raise
 
 
@@ -52,7 +52,6 @@ class WasteBinSimulator:
         temperature_reading = self.sensors[bin_id]["temperature"].measure()
         fill_level = ultrasonic_reading.value
 
-        # Generate additional synthetic data
         humidity = round(random.uniform(10, 90), 1)
         pressure = round(random.uniform(980, 1050), 1)
         sound_level = round(random.uniform(30, 100), 1)
@@ -133,7 +132,6 @@ class WasteBinSimulator:
             }
         ]
 
-        # Capture image periodically
         if (datetime.now() - self.last_capture[bin_id]) > self.camera_interval:
             image_reading = self.sensors[bin_id]["camera"].capture(fill_level)
             readings.append(image_reading.__dict__)
