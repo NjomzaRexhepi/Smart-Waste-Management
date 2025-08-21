@@ -14,3 +14,10 @@ bin\windows\kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic
 
 ## Start the simulator
 python data_simulator\simulator.py --kafka-brokers localhost:9092 --kafka-topic waste-sensor-data
+
+## Start the spark streaming 
+python data_simulator\simulator.py --kafka-brokers localhost:9092 --interval 5
+
+$SPARK_HOME/bin/spark-submit \
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:4.0.0 \
+  spark_streaming/waste_bin_streaming.py
