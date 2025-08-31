@@ -1,11 +1,14 @@
+import os
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col
 from pyspark.sql.types import StructType, StringType, DoubleType, BooleanType, TimestampType
 
+os.environ["HADOOP_HOME"] = "C:\\hadoop"
+os.environ["PATH"] += ";C:\\hadoop\\bin"
 # 1. Create SparkSession with Kafka support
 spark = SparkSession.builder \
     .appName("WasteBinStreamingConsumer") \
-    .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1") \
+    .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.0") \
     .getOrCreate()
 
 spark.sparkContext.setLogLevel("WARN")
