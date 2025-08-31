@@ -1,5 +1,7 @@
 # Smart-Waste-Management
 
+This project presents the design and simulation of an IoT-based Smart Waste Management System. It focuses on the data pipeline, architectural model, and analytical capabilities of a system intended to optimize urban waste collection. Using simulated sensor data, this project demonstrates how real-time monitoring, data processing, and decision-making can improve operational efficiency and promote environmental sustainability in a smart city context.
+
 ## Start the Zookeeper
 bin\windows\zookeeper-server-start.bat config\zookeeper.properties
 
