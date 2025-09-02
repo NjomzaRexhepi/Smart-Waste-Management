@@ -6,7 +6,6 @@ from kafka import KafkaProducer
 from sensors import UltrasonicSensor, TemperatureSensor, GPSSensor, CameraSensor
 from data_generators import generate_bin_data, generate_citizen_report
 
-
 class WasteBinSimulator:
     def __init__(self, kafka_brokers='localhost:9092', kafka_topic='waste-sensor-data'):
         self.bins = generate_bin_data(100)
