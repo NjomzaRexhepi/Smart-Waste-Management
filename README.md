@@ -24,6 +24,7 @@ $SPARK_HOME/bin/spark-submit \
   --packages org.apache.spark:spark-sql-kafka-0-10_2.12:4.0.0 \
   spark_streaming/waste_bin_streaming.py
 
+## Start cassandra and create table
 docker start cassandra
 
 docker exec -it cassandra cqlsh
