@@ -4,8 +4,8 @@ from pyspark.sql.functions import from_json, col, substring, to_timestamp
 from pyspark.sql.types import StructType, StringType, DoubleType, IntegerType, DateType
 
 # --- Hadoop setup ---
-os.environ["HADOOP_HOME"] = "C:\\Program Files\\hadoop\\hadoop-3.3.6"
-os.environ["PATH"] += ";C:\\Program Files\\hadoop\\hadoop-3.3.6\\bin"
+os.environ["HADOOP_HOME"] = "C:\\hadoop-3.3.6"
+os.environ["PATH"] += ";C:\\hadoop-3.3.6\\bin"
 
 # --- SparkSession ---
 spark = SparkSession.builder \
