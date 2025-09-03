@@ -1,16 +1,12 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 from datetime import datetime, timedelta
-import json
 import random
-from typing import Dict, List, Optional
+from typing import Dict
 import warnings
 import streamlit as st
 import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+
 
 warnings.filterwarnings('ignore')
 
@@ -67,7 +63,6 @@ class IoTWasteManagementSystem:
         """Generate realistic sensor data for specified time period"""
         sensor_data = []
 
-        # Generate timestamps (every 15 minutes)
         end_time = datetime.now()
         start_time = end_time - timedelta(hours=hours)
         timestamps = pd.date_range(start=start_time, end=end_time, freq='15min')
@@ -79,7 +74,6 @@ class IoTWasteManagementSystem:
                 fill_level = self._simulate_fill_level(bin_id, timestamp)
                 temperature = self._simulate_temperature(fill_level)
 
-                # Additional sensor data
                 humidity = round(random.uniform(10, 90), 1)
                 pressure = round(random.uniform(980, 1050), 1)
                 sound_level = round(random.uniform(30, 100), 1)
@@ -200,7 +194,6 @@ class IoTWasteManagementSystem:
         return self.citizen_reports_df
 
     def analyze_bin_performance(self) -> Dict:
-        """Analyze bin performance metrics"""
         if self.sensor_data_df.empty:
             return {"error": "No sensor data available"}
 
@@ -271,8 +264,8 @@ class IoTWasteManagementSystem:
             return pd.DataFrame()
 
         bins_needing_collection['priority_score'] = (
-                bins_needing_collection['fill_level_percent'] * 0.6 +  # Fill level weight
-                (bins_needing_collection['temperature_celsius'] - 20) * 0.2 +  # Temperature weight
+                bins_needing_collection['fill_level_percent'] * 0.6 +
+                (bins_needing_collection['temperature_celsius'] - 20) * 0.2 +
                 bins_needing_collection['district'].map({
                     'Commercial': 30, 'Center': 25, 'Industrial': 20, 'Residential': 15
                 }) * 0.2
@@ -281,8 +274,8 @@ class IoTWasteManagementSystem:
         route_data = bins_needing_collection.sort_values('priority_score', ascending=False).reset_index()
 
         route_data['route_order'] = range(1, len(route_data) + 1)
-        route_data['estimated_time_minutes'] = route_data['route_order'] * 15  # 15 min per bin
-        route_data['cumulative_distance_km'] = np.cumsum(np.full(len(route_data), 2.5))  # Avg 2.5km between bins
+        route_data['estimated_time_minutes'] = route_data['route_order'] * 15
+        route_data['cumulative_distance_km'] = np.cumsum(np.full(len(route_data), 2.5))
 
         self.collection_routes_df = route_data
         return route_data[['bin_id', 'district', 'fill_level_percent', 'priority_score',
