@@ -1,0 +1,40 @@
+CREATE TABLE bins (
+    bin_id TEXT PRIMARY KEY,
+    type TEXT,
+    capacity_kg INT,
+    district TEXT,
+    street TEXT,
+    latitude DOUBLE,
+    longitude DOUBLE,
+    installation_date DATE,
+    last_maintenance DATE,
+    status TEXT
+);
+
+CREATE TABLE sensor_readings (
+    bin_id TEXT,
+    sensor_type TEXT,
+    timestamp TIMESTAMP,
+    value TEXT,   -- store as text/JSON for flexibility (e.g., {lat, lon})
+    PRIMARY KEY ((bin_id, sensor_type), timestamp)
+) WITH CLUSTERING ORDER BY (timestamp DESC);
+
+
+CREATE TABLE citizen_reports (
+    report_id TEXT PRIMARY KEY,
+    bin_id TEXT,
+    issue_type TEXT,
+    description TEXT,
+    reporter_id TEXT,
+    timestamp TIMESTAMP,
+    status TEXT
+);
+
+
+CREATE TABLE maintenance_events (
+    event_id UUID PRIMARY KEY,
+    bin_id TEXT,
+    action TEXT,         -- emptied, repaired, serviced
+    technician TEXT,
+    timestamp TIMESTAMP
+);
