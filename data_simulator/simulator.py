@@ -1,21 +1,38 @@
-import time, json, random
-from datetime import datetime, timedelta
+import time
+import json
+import random
+from datetime import datetime, timedelta, date
 from kafka import KafkaProducer
 from sensors import UltrasonicSensor, TemperatureSensor, GPSSensor, CameraSensor
 from data_generators import generate_bin_data, generate_citizen_report
 
 class WasteBinSimulator:
-    def __init__(self, kafka_brokers='localhost:9092', kafka_topic='waste-sensor-data'):
+    def __init__(self, kafka_brokers='localhost:9092'):
+        # Generate 50 bins
         self.bins = generate_bin_data(50)
         self.last_capture = {}
         self.sensors = self._initialize_sensors()
         self.camera_interval = timedelta(minutes=15)
-        self.kafka_topic = kafka_topic
+
+        # Topics for each type of data
+        self.topics = {
+            "bins": "bin-metadata",
+            "sensor": "waste-sensor-data",
+            "reports": "citizen-reports",
+            "maintenance": "maintenance-events"
+        }
 
         print(f"Connecting to Kafka at {kafka_brokers}...")
+
+        # JSON serializer to handle datetime/date
+        def json_serializer(obj):
+            if isinstance(obj, (datetime, date)):
+                return obj.isoformat()
+            return str(obj)
+
         self.producer = KafkaProducer(
             bootstrap_servers=kafka_brokers,
-            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+            value_serializer=lambda v: json.dumps(v, default=json_serializer).encode('utf-8'),
             retries=5
         )
         print("Connected to Kafka!")
@@ -49,14 +66,14 @@ class WasteBinSimulator:
             self.sensors[bin_id]["gps"].measure().__dict__,
             {
                 "bin_id": bin_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.utcnow(),
                 "sensor_type": "weight",
                 "value": weight,
                 "unit": "kg"
             },
             {
                 "bin_id": bin_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.utcnow(),
                 "sensor_type": "co2_ppm",
                 "value": 400 + int(fill_level * random.uniform(10, 20))
             }
@@ -70,39 +87,57 @@ class WasteBinSimulator:
 
     def _generate_special_events(self):
         events = []
+
+        # Citizen report
         if random.random() < 0.1:
             bin = random.choice(self.bins)
+            report = generate_citizen_report(bin['bin_id'])
+            report["timestamp"] = datetime.utcnow()
             events.append({
-                "event_type": "citizen_report",
-                "data": generate_citizen_report(bin['bin_id']),
-                "timestamp": datetime.utcnow().isoformat()
+                "topic": self.topics["reports"],
+                "data": report
             })
+
+        # Maintenance event
         if random.random() < 0.05:
             bin = random.choice(self.bins)
             events.append({
-                "event_type": "maintenance",
+                "topic": self.topics["maintenance"],
                 "data": {
                     "event_id": f"mnt-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
                     "bin_id": bin['bin_id'],
                     "action": random.choice(["emptied", "repaired", "serviced"]),
-                    "technician": f"tech-{random.randint(100, 999)}"
-                },
-                "timestamp": datetime.utcnow().isoformat()
+                    "technician": f"tech-{random.randint(100, 999)}",
+                    "timestamp": datetime.utcnow()
+                }
             })
         return events
+
+    def _send_bin_metadata(self):
+        for bin in self.bins:
+            # Convert date fields to datetime if they are date objects
+            if isinstance(bin.get("installation_date"), date):
+                bin["installation_date"] = bin["installation_date"].isoformat()
+            if isinstance(bin.get("last_maintenance"), date):
+                bin["last_maintenance"] = bin["last_maintenance"].isoformat()
+            self.producer.send(self.topics["bins"], value=bin)
 
     def run(self, interval=10):
         print(f"Starting waste bin simulator with {len(self.bins)} bins...")
         try:
             while True:
-                for bin in self.bins:
-                    bin_id = bin['bin_id']
-                    sensor_data = self._generate_sensor_readings(bin_id)
-                    for reading in sensor_data:
-                        self.producer.send(self.kafka_topic, value={"type": "sensor_reading", "data": reading})
+                # Send bin metadata occasionally
+                self._send_bin_metadata()
 
+                # Sensor readings
+                for bin in self.bins:
+                    sensor_data = self._generate_sensor_readings(bin['bin_id'])
+                    for reading in sensor_data:
+                        self.producer.send(self.topics["sensor"], value=reading)
+
+                # Special events (citizen reports & maintenance)
                 for event in self._generate_special_events():
-                    self.producer.send(self.kafka_topic, value=event)
+                    self.producer.send(event["topic"], value=event["data"])
 
                 if datetime.now().second < 5:
                     print(f"{datetime.now().isoformat()} - Sent data for {len(self.bins)} bins")
@@ -114,16 +149,14 @@ class WasteBinSimulator:
             self.producer.flush()
             self.producer.close()
 
+
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description='Waste Management IoT Simulator')
+
+    parser = argparse.ArgumentParser(description='Smart Waste Management IoT Simulator')
     parser.add_argument('--kafka-brokers', default='localhost:9092')
-    parser.add_argument('--kafka-topic', default='waste-sensor-data')
     parser.add_argument('--interval', type=int, default=10)
     args = parser.parse_args()
 
-    simulator = WasteBinSimulator(
-        kafka_brokers=args.kafka_brokers,
-        kafka_topic=args.kafka_topic
-    )
+    simulator = WasteBinSimulator(kafka_brokers=args.kafka_brokers)
     simulator.run(interval=args.interval)
