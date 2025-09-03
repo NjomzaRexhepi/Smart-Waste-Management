@@ -1,26 +1,32 @@
 import os
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col
-from pyspark.sql.types import StructType, StringType, DoubleType, BooleanType, TimestampType
+from pyspark.sql.functions import substring, from_json, col, to_timestamp
+from pyspark.sql.types import StructType, StringType
 
-os.environ["HADOOP_HOME"] = "C:\\hadoop"
-os.environ["PATH"] += ";C:\\hadoop\\bin"
-# 1. Create SparkSession with Kafka support
+# --- 1. Hadoop setup (Windows specific) ---
+os.environ["HADOOP_HOME"] = "C:\\Program Files\\hadoop\\hadoop-3.3.6"
+os.environ["PATH"] += ";C:\\Program Files\\hadoop\\hadoop-3.3.6\\bin"
+
+# --- 2. Create SparkSession with Kafka + Cassandra support ---
 spark = SparkSession.builder \
     .appName("WasteBinStreamingConsumer") \
-    .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.0") \
+    .config("spark.jars.packages", 
+            "org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.0,"
+            "com.datastax.spark:spark-cassandra-connector_2.13:3.4.1") \
+    .config("spark.cassandra.connection.host", "127.0.0.1") \
+    .config("spark.cassandra.connection.port", "9042") \
     .getOrCreate()
 
 spark.sparkContext.setLogLevel("WARN")
 
-# 2. Define schema for JSON messages
+# --- 3. Define schema for JSON messages ---
 schema = StructType() \
     .add("timestamp", StringType()) \
     .add("bin_id", StringType()) \
     .add("sensor_type", StringType()) \
-    .add("measurement", StringType())  # use StringType initially for flexibility
+    .add("measurement", StringType())
 
-# 3. Read from Kafka
+# --- 4. Read from Kafka ---
 kafka_df = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "localhost:9092") \
@@ -28,20 +34,38 @@ kafka_df = spark.readStream \
     .option("startingOffsets", "latest") \
     .load()
 
-# 4. Convert Kafka value (binary) to string
+# --- 5. Convert Kafka value (binary) to string ---
 json_df = kafka_df.selectExpr("CAST(value AS STRING) as json_str")
 
-# 5. Parse the JSON
+# --- 6. Parse the JSON ---
 parsed_df = json_df.select(from_json(col("json_str"), schema).alias("data")).select("data.*")
 
-# 6. Simple transformation or filter (e.g., only ultrasonic data)
-filtered_df = parsed_df.filter(col("sensor_type") == "ultrasonic")
+# --- 7. Transform fields ---
+# Convert timestamp safely -> Spark timestamp type
+# FIXED: Use to_timestamp with proper format string literal
+transformed_df = parsed_df \
+    .withColumn("ts_trimmed", substring(col("timestamp"), 1, 23)) \
+    .withColumn("event_time", to_timestamp(col("ts_trimmed"), "yyyy-MM-dd'T'HH:mm:ss.SSS")) \
+    .drop("timestamp", "ts_trimmed")
 
-# 7. Output to console (or HDFS, DB, etc.)
+# Optional: filter out invalid timestamps
+clean_df = transformed_df.filter(col("event_time").isNotNull())
+
+# Filter example: only ultrasonic data
+filtered_df = clean_df.filter(col("sensor_type") == "ultrasonic")
+
+# --- 8. Define function to write to Cassandra ---
+def write_to_cassandra(batch_df, batch_id):
+    batch_df.write \
+        .format("org.apache.spark.sql.cassandra") \
+        .mode("append") \
+        .options(keyspace="wastebin", table="sensor_data") \
+        .save()
+
+# --- 9. Start streaming query ---
 query = filtered_df.writeStream \
+    .foreachBatch(write_to_cassandra) \
     .outputMode("append") \
-    .format("console") \
-    .option("truncate", False) \
     .start()
 
 query.awaitTermination()
