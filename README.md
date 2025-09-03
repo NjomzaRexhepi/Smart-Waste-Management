@@ -23,3 +23,24 @@ python data_simulator\simulator.py --kafka-brokers localhost:9092 --interval 5
 $SPARK_HOME/bin/spark-submit \
   --packages org.apache.spark:spark-sql-kafka-0-10_2.12:4.0.0 \
   spark_streaming/waste_bin_streaming.py
+
+## Start cassandra and create table
+docker start cassandra
+
+docker exec -it cassandra cqlsh
+
+cqlsh> create keyspace wastebin with replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+
+cqlsh> use wastebin;
+
+cqlsh:wastebin> create table sensor_data (bin_id text, timestamp text, sensor_type text, measurement text, primary key(bin_id, timestamp));
+
+cqlsh:wastebin> select * from sensor_data;
+
+ bin_id | timestamp | measurement | sensor_type
+--------+-----------+-------------+-------------
+
+(0 rows)
+
+Camera Sensor dataset
+https://www.kaggle.com/datasets/hussainmanasi/trash-bins

@@ -1,9 +1,8 @@
 from faker import Faker
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 
 fake = Faker()
-
 
 def generate_bin_location():
     return {
@@ -11,10 +10,9 @@ def generate_bin_location():
         "district": random.choice(["Center", "Industrial", "Residential", "Commercial"]),
         "coordinates": {
             "lat": 42.66 + random.uniform(-0.05, 0.05),  # Prishtina approx latitude
-            "lon": 21.17 + random.uniform(-0.05, 0.05)  # Prishtina approx longitude
+            "lon": 21.17 + random.uniform(-0.05, 0.05)
         }
     }
-
 
 def generate_bin_data(num_bins=50):
     bins = []
@@ -31,15 +29,13 @@ def generate_bin_data(num_bins=50):
         })
     return bins
 
-
 def generate_citizen_report(bin_id):
     issues = [
         "Overflowing bin", "Bad odor", "Recycling contamination",
         "Damaged bin", "Illegal dumping", "Missed collection"
     ]
-
     return {
-        "report_id": f"report-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+        "report_id": f"report-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
         "bin_id": bin_id,
         "timestamp": datetime.utcnow().isoformat(),
         "issue_type": random.choice(issues),

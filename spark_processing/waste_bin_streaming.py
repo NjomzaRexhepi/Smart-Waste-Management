@@ -34,10 +34,8 @@ kafka_df = spark.readStream \
     .option("startingOffsets", "latest") \
     .load()
 
-# --- 5. Convert Kafka value (binary) to string ---
 json_df = kafka_df.selectExpr("CAST(value AS STRING) as json_str")
 
-# --- 6. Parse the JSON ---
 parsed_df = json_df.select(from_json(col("json_str"), schema).alias("data")).select("data.*")
 
 # --- 7. Transform fields ---

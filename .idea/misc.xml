@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="MLMasterEnv" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="MLMasterEnv" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="IOTenv" project-jdk-type="Python SDK" />
 </project>
