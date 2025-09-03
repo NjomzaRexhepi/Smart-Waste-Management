@@ -1,47 +1,66 @@
-import os
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col
-from pyspark.sql.types import StructType, StringType, DoubleType, BooleanType, TimestampType
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+import os
 
-os.environ["HADOOP_HOME"] = "C:\\hadoop"
-os.environ["PATH"] += ";C:\\hadoop\\bin"
-# 1. Create SparkSession with Kafka support
+# Create Spark session with Windows-specific configurations
 spark = SparkSession.builder \
-    .appName("WasteBinStreamingConsumer") \
-    .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.0") \
+    .appName("SmartWasteManagement") \
+    .config("spark.sql.streaming.checkpointLocation", "C:/tmp/spark_checkpoints/my_stream") \
+    .config("spark.hadoop.io.native.lib.available", "false") \
+    .config("spark.sql.adaptive.enabled", "false") \
+    .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer") \
     .getOrCreate()
 
+# Set log level to reduce noise
 spark.sparkContext.setLogLevel("WARN")
 
-# 2. Define schema for JSON messages
-schema = StructType() \
-    .add("timestamp", StringType()) \
-    .add("bin_id", StringType()) \
-    .add("sensor_type", StringType()) \
-    .add("measurement", StringType())  # use StringType initially for flexibility
+# Define schema for the incoming JSON data
+schema = StructType([
+    StructField("bin_id", StringType(), True),
+    StructField("measurement", StringType(), True)
+])
 
-# 3. Read from Kafka
-kafka_df = spark.readStream \
-    .format("kafka") \
-    .option("kafka.bootstrap.servers", "localhost:9092") \
-    .option("subscribe", "waste-sensor-data") \
-    .option("startingOffsets", "latest") \
-    .load()
+try:
+    # Read from Kafka
+    df = spark \
+        .readStream \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", "localhost:9092") \
+        .option("subscribe", "waste-sensor-data") \
+        .option("startingOffsets", "latest") \
+        .load()
 
-# 4. Convert Kafka value (binary) to string
-json_df = kafka_df.selectExpr("CAST(value AS STRING) as json_str")
+    # Parse JSON data
+    parsed_df = df.select(
+        col("value").cast("string").alias("json_str")
+    ).filter(
+        col("json_str").isNotNull()
+    ).select(
+        from_json(col("json_str"), schema).alias("data")
+    ).select(
+        col("data.bin_id").alias("bin_id"),
+        col("data.measurement").alias("measurement")
+    )
 
-# 5. Parse the JSON
-parsed_df = json_df.select(from_json(col("json_str"), schema).alias("data")).select("data.*")
+    # Create checkpoint directory if it doesn't exist
+    checkpoint_dir = "C:/tmp/spark_checkpoints/my_stream"
+    os.makedirs(checkpoint_dir, exist_ok=True)
 
-# 6. Simple transformation or filter (e.g., only ultrasonic data)
-filtered_df = parsed_df.filter(col("sensor_type") == "ultrasonic")
+    # Write to console with proper error handling
+    query = parsed_df.writeStream \
+        .outputMode("append") \
+        .format("console") \
+        .option("truncate", "false") \
+        .option("checkpointLocation", checkpoint_dir) \
+        .trigger(processingTime='10 seconds') \
+        .start()
 
-# 7. Output to console (or HDFS, DB, etc.)
-query = filtered_df.writeStream \
-    .outputMode("append") \
-    .format("console") \
-    .option("truncate", False) \
-    .start()
+    print("Streaming query started successfully!")
+    query.awaitTermination()
 
-query.awaitTermination()
+except Exception as e:
+    print(f"Error occurred: {str(e)}")
+    print("Stopping Spark session...")
+    spark.stop()
+    raise e
