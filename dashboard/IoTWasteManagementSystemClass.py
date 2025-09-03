@@ -25,7 +25,6 @@ st.set_page_config(
 
 class IoTWasteManagementSystem:
     def __init__(self, num_bins: int = 50, simulation_days: int = 30):
-        """Initialize the IoT Waste Management System with pandas DataFrames"""
         self.num_bins = num_bins
         self.simulation_days = simulation_days
 
@@ -85,7 +84,7 @@ class IoTWasteManagementSystem:
                 pressure = round(random.uniform(980, 1050), 1)
                 sound_level = round(random.uniform(30, 100), 1)
                 co2_ppm = round(random.uniform(400, 2000))
-                battery_level = max(20, 100 - random.uniform(0, 0.5))  # Gradual drain
+                battery_level = max(20, 100 - random.uniform(0, 0.5))
                 ping_ms = round(random.uniform(10, 300), 1)
                 motion_detected = random.choice([True, False])
                 device_status = random.choice(["OK", "ERROR", "OFFLINE"])
@@ -118,7 +117,6 @@ class IoTWasteManagementSystem:
         return new_data
 
     def _simulate_fill_level(self, bin_id: str, timestamp: datetime) -> float:
-        """Simulate realistic fill level based on time patterns"""
         base_rate = 2.0
 
         hour = timestamp.hour
@@ -129,10 +127,9 @@ class IoTWasteManagementSystem:
         else:
             time_multiplier = 0.5
 
-        if weekday >= 5:  # Weekend
+        if weekday >= 5:
             time_multiplier *= 1.3
 
-        # District-based patterns
         district = self.bins_df[self.bins_df['bin_id'] == bin_id]['district'].iloc[0]
         district_multipliers = {
             'Commercial': 2.0,
@@ -143,11 +140,9 @@ class IoTWasteManagementSystem:
 
         fill_rate = base_rate * time_multiplier * district_multipliers.get(district, 1.0)
 
-        # Simulate collection events (random emptying)
-        if random.random() < 0.02:  # 2% chance of collection
-            current_fill = 5.0  # Almost empty after collection
+        if random.random() < 0.02:
+            current_fill = 5.0
         else:
-            # Get previous fill level or start with random
             previous_data = self.sensor_data_df[
                 (self.sensor_data_df['bin_id'] == bin_id) &
                 (self.sensor_data_df['timestamp'] < timestamp)
@@ -165,10 +160,8 @@ class IoTWasteManagementSystem:
         """Simulate temperature based on fill level and organic waste"""
         base_temp = 20 + random.uniform(-3, 3)
 
-        # Higher temperatures with more waste (organic decomposition)
         temp_increase = (fill_level / 100) * random.uniform(2, 8)
 
-        # Random organic waste spikes (15% chance as per research)
         if random.random() < 0.15:
             temp_increase += random.uniform(5, 15)
 
@@ -211,7 +204,6 @@ class IoTWasteManagementSystem:
         if self.sensor_data_df.empty:
             return {"error": "No sensor data available"}
 
-        # Calculate key metrics
         latest_data = self.sensor_data_df.groupby('bin_id').last()
 
         analysis = {
@@ -229,17 +221,14 @@ class IoTWasteManagementSystem:
         return analysis
 
     def detect_anomalies(self) -> pd.DataFrame:
-        """Detect anomalous behavior in sensor data"""
         if self.sensor_data_df.empty:
             return pd.DataFrame()
 
         anomalies = []
 
-        # Group by bin for analysis
         for bin_id, bin_data in self.sensor_data_df.groupby('bin_id'):
             bin_data = bin_data.sort_values('timestamp')
 
-            # Temperature anomalies
             temp_mean = bin_data['temperature_celsius'].mean()
             temp_std = bin_data['temperature_celsius'].std()
             temp_threshold = temp_mean + 2 * temp_std
@@ -255,7 +244,6 @@ class IoTWasteManagementSystem:
                     'severity': 'High' if row['temperature_celsius'] > 40 else 'Medium'
                 })
 
-            # Fill level anomalies (sudden drops indicating possible collection or vandalism)
             fill_diff = bin_data['fill_level_percent'].diff().abs()
             sudden_drops = bin_data[fill_diff > 30]
 
@@ -272,32 +260,26 @@ class IoTWasteManagementSystem:
         return pd.DataFrame(anomalies)
 
     def optimize_collection_routes(self) -> pd.DataFrame:
-        """Optimize waste collection routes based on current fill levels"""
         if self.sensor_data_df.empty:
             return pd.DataFrame()
 
-        # Get latest data for each bin
         latest_data = self.sensor_data_df.groupby('bin_id').last()
 
-        # Filter bins that need collection (>70% full)
         bins_needing_collection = latest_data[latest_data['fill_level_percent'] >= 70].copy()
 
         if bins_needing_collection.empty:
             return pd.DataFrame()
 
-        # Add priority scoring
         bins_needing_collection['priority_score'] = (
                 bins_needing_collection['fill_level_percent'] * 0.6 +  # Fill level weight
                 (bins_needing_collection['temperature_celsius'] - 20) * 0.2 +  # Temperature weight
                 bins_needing_collection['district'].map({
                     'Commercial': 30, 'Center': 25, 'Industrial': 20, 'Residential': 15
-                }) * 0.2  # District priority weight
+                }) * 0.2
         )
 
-        # Sort by priority
         route_data = bins_needing_collection.sort_values('priority_score', ascending=False).reset_index()
 
-        # Add route information
         route_data['route_order'] = range(1, len(route_data) + 1)
         route_data['estimated_time_minutes'] = route_data['route_order'] * 15  # 15 min per bin
         route_data['cumulative_distance_km'] = np.cumsum(np.full(len(route_data), 2.5))  # Avg 2.5km between bins
@@ -307,10 +289,8 @@ class IoTWasteManagementSystem:
                            'route_order', 'estimated_time_minutes', 'cumulative_distance_km']]
 
     def generate_reports(self) -> Dict:
-        """Generate comprehensive system reports"""
         reports = {}
 
-        # Performance Report
         if not self.sensor_data_df.empty:
             latest_data = self.sensor_data_df.groupby('bin_id').last()
 
@@ -328,7 +308,6 @@ class IoTWasteManagementSystem:
             }
             reports['performance'] = performance_report
 
-        # Citizen Reports Summary
         if not self.citizen_reports_df.empty:
             citizen_summary = {
                 'total_reports': len(self.citizen_reports_df),
@@ -352,12 +331,10 @@ class IoTWasteManagementSystem:
         return reports
 
     def visualize_data(self):
-        """Create visualizations for the Streamlit app"""
         if self.sensor_data_df.empty:
             st.warning("No data to visualize. Generate sensor data first.")
             return
 
-        # Create tabs for different visualizations
         tab1, tab2, tab3, tab4 = st.tabs(["Overview", "District Analysis", "Time Analysis", "Anomalies"])
 
         with tab1:
@@ -411,7 +388,6 @@ class IoTWasteManagementSystem:
         with tab3:
             st.subheader("Time Analysis")
 
-            # Sample a few bins for time series visualization
             sample_bins = self.sensor_data_df['bin_id'].unique()[:3]
             time_data = self.sensor_data_df[self.sensor_data_df['bin_id'].isin(sample_bins)]
 
@@ -420,7 +396,6 @@ class IoTWasteManagementSystem:
                           labels={'fill_level_percent': 'Fill Level (%)', 'timestamp': 'Time'})
             st.plotly_chart(fig, use_container_width=True)
 
-            # Hourly patterns
             hourly_data = self.sensor_data_df.copy()
             hourly_data['hour'] = hourly_data['timestamp'].dt.hour
             hourly_avg = hourly_data.groupby('hour')['fill_level_percent'].mean().reset_index()
@@ -448,7 +423,6 @@ class IoTWasteManagementSystem:
                 st.info("No anomalies detected in the current data.")
 
     def export_data(self, filename_prefix: str = "waste_management"):
-        """Export all data to CSV files"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         bins_file = f"{filename_prefix}_bins_{timestamp}.csv"
@@ -470,16 +444,13 @@ class IoTWasteManagementSystem:
 
 
 def main():
-    """Streamlit application for IoT Waste Management System"""
     st.title("🗑️ IoT Waste Management System")
     st.markdown("---")
 
-    # Initialize session state
     if 'waste_system' not in st.session_state:
         st.session_state.waste_system = None
         st.session_state.data_generated = False
 
-    # Sidebar controls
     st.sidebar.header("Configuration")
     num_bins = st.sidebar.slider("Number of Bins", 10, 100, 20)
     simulation_days = st.sidebar.slider("Simulation Days", 1, 30, 7)
@@ -506,9 +477,7 @@ def main():
             st.session_state.data_generated = True
             st.success("Data generation complete!")
 
-        # Main dashboard
         if st.session_state.data_generated:
-            # Performance metrics
             st.header("System Performance")
             performance = st.session_state.waste_system.analyze_bin_performance()
 
@@ -524,11 +493,9 @@ def main():
             col3.metric("Low Battery Warnings", performance['low_battery_bins'])
             col4.metric("Offline Devices", performance['offline_bins'])
 
-            # Visualizations
             st.markdown("---")
             st.session_state.waste_system.visualize_data()
 
-            # Route optimization
             st.markdown("---")
             st.header("Collection Route Optimization")
             if st.button("Optimize Collection Routes"):
@@ -536,7 +503,6 @@ def main():
                 if not routes.empty:
                     st.dataframe(routes)
 
-                    # Show route summary
                     route_summary = st.session_state.waste_system.generate_reports().get('route_optimization', {})
                     if route_summary:
                         col1, col2, col3, col4 = st.columns(4)
@@ -547,7 +513,6 @@ def main():
                 else:
                     st.info("No bins currently require collection.")
 
-            # Citizen reports
             st.markdown("---")
             st.header("Citizen Reports")
             if not st.session_state.waste_system.citizen_reports_df.empty:
@@ -562,7 +527,6 @@ def main():
             else:
                 st.info("No citizen reports available.")
 
-            # Export data
             st.markdown("---")
             st.header("Data Export")
             if st.button("Export Data to CSV"):
