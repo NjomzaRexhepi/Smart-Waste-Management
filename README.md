@@ -41,3 +41,6 @@ cqlsh:wastebin> select * from sensor_data;
 --------+-----------+-------------+-------------
 
 (0 rows)
+
+Camera Sensor dataset
+https://www.kaggle.com/datasets/hussainmanasi/trash-bins
