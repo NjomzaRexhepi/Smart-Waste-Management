@@ -2,29 +2,30 @@ import random
 from datetime import datetime
 from dataclasses import dataclass
 
-
 @dataclass
 class SensorReading:
     bin_id: str
     timestamp: str
     sensor_type: str
-    value: float
+    value: any
     unit: str = None
 
-
 class UltrasonicSensor:
-    """Simulates fill level detection using ultrasonic waves"""
-
-    def __init__(self, bin_id):
+    """Simulates fill level detection"""
+    def __init__(self, bin_id, capacity):
         self.bin_id = bin_id
         self.fill_level = 0.0
-        self.sensor_type = "ultrasonic"
+        self.capacity = capacity
+        self.sensor_type = "fill_level"
 
     def measure(self):
-        fill_increase = random.uniform(0.5, 3.0)
+        # daily pattern (faster fill at certain hours)
+        hour = datetime.now().hour
+        base_increase = 1.0 if 6 <= hour <= 9 or 18 <= hour <= 22 else 0.3
+        fill_increase = random.uniform(base_increase, base_increase * 3.0)
 
-        if random.random() < 0.05:
-            self.fill_level = 0.0
+        if random.random() < 0.02:
+            self.fill_level = 0.0  # bin emptied
         else:
             self.fill_level = min(100.0, self.fill_level + fill_increase)
 
@@ -36,18 +37,16 @@ class UltrasonicSensor:
             unit="%"
         )
 
-
 class TemperatureSensor:
-    """Simulates internal bin temperature with organic waste spikes"""
-
+    """Internal bin temperature"""
     def __init__(self, bin_id):
         self.bin_id = bin_id
         self.sensor_type = "temperature"
         self.base_temp = random.uniform(18.0, 25.0)
 
-    def measure(self):
-        if random.random() < 0.15:
-            temp = self.base_temp + random.uniform(5.0, 20.0)
+    def measure(self, fill_level):
+        if fill_level > 70 and random.random() < 0.3:
+            temp = self.base_temp + random.uniform(5.0, 15.0)
         else:
             temp = self.base_temp + random.uniform(-2.0, 2.0)
 
@@ -59,9 +58,7 @@ class TemperatureSensor:
             unit="°C"
         )
 
-
 class GPSSensor:
-
     def __init__(self, bin_id, lat, lon):
         self.bin_id = bin_id
         self.sensor_type = "gps"
@@ -79,9 +76,7 @@ class GPSSensor:
             }
         )
 
-
 class CameraSensor:
-
     def __init__(self, bin_id):
         self.bin_id = bin_id
         self.sensor_type = "camera"
@@ -100,6 +95,6 @@ class CameraSensor:
             sensor_type=self.sensor_type,
             value={
                 "status": status,
-                "confidence": random.uniform(0.85, 0.98)
+                "confidence": round(random.uniform(0.85, 0.98), 2)
             }
         )
