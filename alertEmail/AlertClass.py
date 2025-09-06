@@ -66,30 +66,6 @@ class AlertSystem:
         except Exception as e:
             self.logger.error(f"Failed to send email: {e}")
     
-      
-    def send_sms_alert(self, alert_data, phone_numbers):
-        """Send SMS alert using Twilio (requires Twilio account)"""
-        try:
-            # This would require Twilio credentials
-            from twilio.rest import Client
-            
-            account_sid = 'your_account_sid'
-            auth_token = 'your_auth_token'
-            client = Client(account_sid, auth_token)
-            
-            message_body = f"URGENT: {alert_data['alarm_type']} at Bin {alert_data['bin_id']}. Value: {alert_data['value']}. Time: {alert_data['timestamp']}"
-            
-            for phone in phone_numbers:
-                message = client.messages.create(
-                    body=message_body,
-                    from_='+1234567890',  # Your Twilio phone number
-                    to=phone
-                )
-                self.logger.info(f"SMS alert sent to {phone} for {alert_data['bin_id']}")
-                
-        except Exception as e:
-            self.logger.error(f"Failed to send SMS alert: {e}")
-    
     def check_alert_cooldown(self, bin_id):
         """Check if we should send alert based on cooldown period"""
         current_time = time.time()
