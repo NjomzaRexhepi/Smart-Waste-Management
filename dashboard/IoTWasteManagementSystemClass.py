@@ -1,3 +1,8 @@
+import os
+# os.environ["CASSANDRA_DRIVER_NO_EXTENSIONS"] = "1"
+# os.environ["CASSANDRA_DRIVER_EVENT_LOOP_MANAGER"] = "asyncio"
+
+from cassandra.cluster import Cluster
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -7,7 +12,6 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
 from typing import Dict, List, Optional
 
