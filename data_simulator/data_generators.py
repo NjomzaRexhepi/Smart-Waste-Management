@@ -46,8 +46,7 @@
 
 from faker import Faker
 import random
-import uuid
-from datetime import datetime, timezone
+from datetime import datetime, date, timezone
 
 fake = Faker()
 
@@ -73,14 +72,10 @@ def generate_bin_data(num_bins=50):
         bins.append({
             "bin_id": str(uuid.uuid4()),
             "type": random.choice(["street", "residential", "commercial", "overflow"]),
-            "capacity": random.choice([60, 120, 240, 500]),
-            "installation_date": installation_date.strftime('%Y-%m-%d'),  # Format as string
-            "last_maintenance": last_maintenance.strftime('%Y-%m-%d'),    # Format as string
-            "latitude": location["coordinates"]["lat"],
-            "longitude": location["coordinates"]["lon"],
-            "street": location["street"],
-            "district": location["district"],
-            "current_fill_level": round(random.uniform(5.0, 75.0), 2),
+            "capacity_kg": random.choice([60, 120, 240, 500]),
+            "installation_date": fake.date_time_between(start_date='-2y', end_date='now', tzinfo=timezone.utc),
+            "last_maintenance": fake.date_time_between(start_date='-6m', end_date='now', tzinfo=timezone.utc),
+            "location": location,
             "status": "active"
         })
     return bins
