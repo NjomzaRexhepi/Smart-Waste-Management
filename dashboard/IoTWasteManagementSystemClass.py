@@ -49,7 +49,6 @@ class CassandraConnection:
             st.error("No Cassandra connection available")
             return None
         try:
-            # Debug prints (remove in production)
             if params is not None:
                 print(f"Executing query: {query}")
                 print(f"Params: {params}")
@@ -57,10 +56,8 @@ class CassandraConnection:
                 print(f"Number of params: {len(params)}")
             
             if params is not None:
-                # Ensure params is always a tuple
                 if not isinstance(params, tuple):
                     params = tuple(params)
-                # Use prepared statement to avoid potential binding issues
                 prepared = self.session.prepare(query)
                 result = self.session.execute(prepared, params)
             else:
@@ -68,7 +65,6 @@ class CassandraConnection:
             return list(result)
         except Exception as e:
             st.error(f"Query execution failed: {str(e)}")
-            # Also print for debugging
             print(f"Failed query: {query}")
             print(f"Failed params: {params}")
             return None
