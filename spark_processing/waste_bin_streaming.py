@@ -7,6 +7,7 @@ from pyspark.sql.functions import (
 from pyspark.sql.types import (
     StructType, StringType, DoubleType, IntegerType, BooleanType, DateType, TimestampType
 )
+from pyspark.sql.functions import try_to_timestamp
 
 # -----------------------------
 # Configurable thresholds
@@ -17,7 +18,7 @@ TEMPERATURE_ALARM = 60.0
 # -----------------------------
 # Environment setup
 # -----------------------------
-os.environ["HADOOP_HOME"] = os.getenv("HADOOP_HOME", r"C:\Program Files\hadoop\hadoop-3.3.6")
+os.environ["HADOOP_HOME"] = os.getenv("HADOOP_HOME", r"C:\hadoop-3.3.6")
 os.environ["PATH"] += f";{os.environ['HADOOP_HOME']}\\bin"
 
 # -----------------------------
@@ -53,7 +54,7 @@ def read_kafka(topic):
         .format("kafka") \
         .option("kafka.bootstrap.servers", kafka_servers) \
         .option("subscribe", topic) \
-        .option("startingOffsets", "latest") \
+        .option("startingOffsets", "earliest") \
         .option("failOnDataLoss", "false") \
         .option("maxOffsetsPerTrigger", 1000) \
         .load() \
@@ -105,8 +106,8 @@ schema_bins = StructType() \
     .add("capacity", DoubleType()) \
     .add("current_fill_level", DoubleType()) \
     .add("status", StringType()) \
-    .add("last_maintenance_date", StringType()) \
-    .add("installation_date", StringType())
+    .add("last_maintenance_date", TimestampType()) \
+    .add("installation_date", TimestampType())
 
 schema_sensor = StructType() \
     .add("sensor_id", StringType()) \
@@ -175,6 +176,7 @@ def parse_timestamp_safe(timestamp_col):
         to_timestamp(timestamp_col, "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"),
         to_timestamp(timestamp_col, "yyyy-MM-dd'T'HH:mm:ss.SSS"),
         to_timestamp(timestamp_col, "yyyy-MM-dd'T'HH:mm:ss"),
+        to_timestamp(timestamp_col, "yyyy-MM-dd"),
         to_timestamp(timestamp_col)
     )
 
@@ -186,14 +188,14 @@ bins_df = read_kafka("bins") \
     .select(from_json(col("json_str"), schema_bins).alias("data")) \
     .select("data.*") \
     .filter(col("bin_id").isNotNull()) \
-    .withColumn("last_maintenance_date", 
-                when(col("last_maintenance_date").isNotNull() & (col("last_maintenance_date") != ""), 
-                     parse_timestamp_safe(col("last_maintenance_date")))
-                .otherwise(lit(None).cast(TimestampType()))) \
-    .withColumn("installation_date", 
-                when(col("installation_date").isNotNull() & (col("installation_date") != ""), 
-                     parse_timestamp_safe(col("installation_date")))
-                .otherwise(lit(None).cast(TimestampType())))
+    .withColumn(
+        "last_maintenance_date",
+        try_to_timestamp("last_maintenance_date")
+    ) \
+    .withColumn(
+        "installation_date",
+        try_to_timestamp("installation_date")
+    )
 
 bins_query = bins_df.writeStream \
     .foreachBatch(lambda df, epoch_id: process_batch_safe(df, epoch_id, "wastebin", "bins", "BINS")) \
@@ -357,9 +359,9 @@ def print_stream_status():
 
 try:
     print("\n" + "="*60)
-    print("🚀 ALL STREAMS STARTED SUCCESSFULLY!")
+    print("ALL STREAMS STARTED SUCCESSFULLY!")
     print("="*60)
-    print("📊 Processing Topics:")
+    print("Processing Topics:")
     print("  • bins -> wastebin.bins")
     print("  • sensor_data -> wastebin.sensor_data") 
     print("  • citizen_reports -> wastebin.citizen_reports")
@@ -369,7 +371,7 @@ try:
     print("  • route_history -> wastebin.route_history")
     print("  • sensor-based alarms -> wastebin.alarms")
     print("="*60)
-    print("💡 Press Ctrl+C to stop all streams")
+    print("Press Ctrl+C to stop all streams")
     print("="*60)
     
     # Print initial status
@@ -379,17 +381,17 @@ try:
     spark.streams.awaitAnyTermination()
     
 except KeyboardInterrupt:
-    print("\n🛑 Stopping all streams...")
+    print("\nStopping all streams...")
     for stream in spark.streams.active:
         print(f"Stopping {stream.name}...")
         stream.stop()
-    print("✅ All streams stopped")
+    print("All streams stopped")
     
 except Exception as e:
-    print(f"❌ Error occurred: {str(e)}")
+    print(f"Error occurred: {str(e)}")
     import traceback
     traceback.print_exc()
     
 finally:
     spark.stop()
-    print("🔚 Spark session closed")
+    print("Spark session closed")
