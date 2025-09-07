@@ -1,40 +1,84 @@
-CREATE TABLE bins (
-    bin_id TEXT PRIMARY KEY,
-    type TEXT,
-    capacity_kg INT,
-    district TEXT,
-    street TEXT,
-    latitude DOUBLE,
-    longitude DOUBLE,
-    installation_date DATE,
-    last_maintenance DATE,
-    status TEXT
+-- Drop tables if they exist
+DROP TABLE IF EXISTS bins;
+DROP TABLE IF EXISTS sensor_data;
+DROP TABLE IF EXISTS citizen_reports;
+DROP TABLE IF EXISTS maintenance_events;
+DROP TABLE IF EXISTS alarms;
+DROP TABLE IF EXISTS route_history;
+DROP TABLE IF EXISTS performance_analytics;
+
+-- Recreate tables
+
+CREATE TABLE IF NOT EXISTS bins (
+    bin_id UUID PRIMARY KEY,
+    location_lat double,
+    location_lng double,
+    type text,
+    capacity double,
+    current_fill_level double,
+    status text,
+    last_maintenance_date timestamp,
+    installation_date timestamp
 );
 
-CREATE TABLE sensor_readings (
-    bin_id TEXT,
-    sensor_type TEXT,
-    timestamp TIMESTAMP,
-    value TEXT,   -- store as text/JSON for flexibility (e.g., {lat, lon})
-    PRIMARY KEY ((bin_id, sensor_type), timestamp)
-) WITH CLUSTERING ORDER BY (timestamp DESC);
-
-
-CREATE TABLE citizen_reports (
-    report_id TEXT PRIMARY KEY,
-    bin_id TEXT,
-    issue_type TEXT,
-    description TEXT,
-    reporter_id TEXT,
-    timestamp TIMESTAMP,
-    status TEXT
+CREATE TABLE IF NOT EXISTS sensor_data (
+    sensor_id UUID PRIMARY KEY,
+    bin_id UUID,
+    timestamp timestamp,
+    fill_level double,
+    temperature double,
+    weight double,
+    humidity double,
+    status text
 );
 
+CREATE TABLE IF NOT EXISTS citizen_reports (
+    report_id UUID PRIMARY KEY,
+    bin_id UUID,
+    report_timestamp timestamp,
+    report_type text,
+    description text,
+    resolved boolean,
+    resolved_timestamp timestamp
+);
 
-CREATE TABLE maintenance_events (
+CREATE TABLE IF NOT EXISTS maintenance_events (
     event_id UUID PRIMARY KEY,
-    bin_id TEXT,
-    action TEXT,         -- emptied, repaired, serviced
-    technician TEXT,
-    timestamp TIMESTAMP
+    bin_id UUID,
+    maintenance_type text,
+    event_timestamp timestamp,
+    performed_by text,
+    duration double,
+    cost double
+);
+
+CREATE TABLE IF NOT EXISTS alarms (
+    alarm_id UUID PRIMARY KEY,
+    bin_id UUID,
+    alarm_type text,
+    triggered_at timestamp,
+    resolved_at timestamp,
+    severity text,
+    status text
+);
+
+CREATE TABLE IF NOT EXISTS route_history (
+    route_id UUID,
+    bin_id UUID,
+    service_date timestamp,
+    collection_status text,
+    PRIMARY KEY (route_id, bin_id)
+);
+
+CREATE TABLE IF NOT EXISTS performance_analytics (
+    id UUID PRIMARY KEY,
+    date date,
+    total_bins int,
+    avg_fill_level double,
+    total_reports int,
+    resolved_reports int,
+    maintenance_events_count int,
+    avg_response_time double,
+    alarms_count int,
+    routes_completed int
 );
