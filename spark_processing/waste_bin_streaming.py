@@ -15,6 +15,7 @@ import logging
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+from pyspark.sql.functions import try_to_timestamp
 
 # -----------------------------
 # Configurable thresholds
@@ -25,7 +26,7 @@ TEMPERATURE_ALARM = 60.0
 # -----------------------------
 # Environment setup
 # -----------------------------
-os.environ["HADOOP_HOME"] = os.getenv("HADOOP_HOME", r"C:\Program Files\hadoop\hadoop-3.3.6")
+os.environ["HADOOP_HOME"] = os.getenv("HADOOP_HOME", r"C:\hadoop-3.3.6")
 os.environ["PATH"] += f";{os.environ['HADOOP_HOME']}\\bin"
 
 EMAIL_CONFIG = {
@@ -103,7 +104,7 @@ def read_kafka(topic):
         .format("kafka") \
         .option("kafka.bootstrap.servers", kafka_servers) \
         .option("subscribe", topic) \
-        .option("startingOffsets", "latest") \
+        .option("startingOffsets", "earliest") \
         .option("failOnDataLoss", "false") \
         .option("maxOffsetsPerTrigger", 1000) \
         .load() \
@@ -162,8 +163,8 @@ schema_bins = StructType() \
     .add("capacity", DoubleType()) \
     .add("current_fill_level", DoubleType()) \
     .add("status", StringType()) \
-    .add("last_maintenance_date", StringType()) \
-    .add("installation_date", StringType())
+    .add("last_maintenance_date", TimestampType()) \
+    .add("installation_date", TimestampType())
 
 schema_sensor = StructType() \
     .add("sensor_id", StringType()) \
@@ -232,6 +233,7 @@ def parse_timestamp_safe(timestamp_col):
         to_timestamp(timestamp_col, "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"),
         to_timestamp(timestamp_col, "yyyy-MM-dd'T'HH:mm:ss.SSS"),
         to_timestamp(timestamp_col, "yyyy-MM-dd'T'HH:mm:ss"),
+        to_timestamp(timestamp_col, "yyyy-MM-dd"),
         to_timestamp(timestamp_col)
     )
 
@@ -243,14 +245,14 @@ bins_df = read_kafka("bins") \
     .select(from_json(col("json_str"), schema_bins).alias("data")) \
     .select("data.*") \
     .filter(col("bin_id").isNotNull()) \
-    .withColumn("last_maintenance_date", 
-                when(col("last_maintenance_date").isNotNull() & (col("last_maintenance_date") != ""), 
-                     parse_timestamp_safe(col("last_maintenance_date")))
-                .otherwise(lit(None).cast(TimestampType()))) \
-    .withColumn("installation_date", 
-                when(col("installation_date").isNotNull() & (col("installation_date") != ""), 
-                     parse_timestamp_safe(col("installation_date")))
-                .otherwise(lit(None).cast(TimestampType())))
+    .withColumn(
+        "last_maintenance_date",
+        try_to_timestamp("last_maintenance_date")
+    ) \
+    .withColumn(
+        "installation_date",
+        try_to_timestamp("installation_date")
+    )
 
 bins_query = bins_df.writeStream \
     .foreachBatch(lambda df, epoch_id: process_batch_safe(df, epoch_id, "wastebin", "bins", "BINS")) \
