@@ -47,7 +47,7 @@
 from faker import Faker
 import random
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 fake = Faker()
 
@@ -65,17 +65,22 @@ def generate_bin_data(num_bins=50):
     bins = []
     for i in range(num_bins):
         location = generate_bin_location()
+        
+        # Ensure dates are properly formatted
+        installation_date = fake.date_between(start_date='-2y', end_date='today')
+        last_maintenance = fake.date_between(start_date='-6m', end_date='today')
+        
         bins.append({
-            "bin_id": str(uuid.uuid4()), 
+            "bin_id": str(uuid.uuid4()),
             "type": random.choice(["street", "residential", "commercial", "overflow"]),
-            "capacity": random.choice([60, 120, 240, 500]), 
-            "installation_date": fake.date_between(start_date='-2y', end_date='today'),
-            "last_maintenance": fake.date_between(start_date='-6m', end_date='today'),
+            "capacity": random.choice([60, 120, 240, 500]),
+            "installation_date": installation_date.strftime('%Y-%m-%d'),  # Format as string
+            "last_maintenance": last_maintenance.strftime('%Y-%m-%d'),    # Format as string
             "latitude": location["coordinates"]["lat"],
             "longitude": location["coordinates"]["lon"],
             "street": location["street"],
             "district": location["district"],
-            "current_fill_level": round(random.uniform(5.0, 75.0), 2), 
+            "current_fill_level": round(random.uniform(5.0, 75.0), 2),
             "status": "active"
         })
     return bins
@@ -85,12 +90,49 @@ def generate_citizen_report(bin_id):
         "Overflowing bin", "Bad odor", "Recycling contamination",
         "Damaged bin", "Illegal dumping", "Missed collection"
     ]
+    
+    timestamp = datetime.now(timezone.utc)
+    
     return {
-        "report_id": f"report-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
-        "bin_id": bin_id,
-        "timestamp": datetime.utcnow().isoformat(),
+        "report_id": f"report-{timestamp.strftime('%Y%m%d%H%M%S%f')}",
+        "bin_id": bin_id if bin_id else str(uuid.uuid4()),  # Ensure bin_id is not empty
+        "timestamp": timestamp.strftime('%Y-%m-%d %H:%M:%S'),  # Standard SQL timestamp format
         "issue_type": random.choice(issues),
         "description": fake.sentence(),
         "reporter_id": f"citizen-{random.randint(1000, 9999)}",
         "status": "reported"
     }
+
+def validate_data(data_dict):
+    """Validate that no critical fields are empty strings"""
+    critical_fields = ['timestamp', 'installation_date', 'last_maintenance']
+    
+    for field in critical_fields:
+        if field in data_dict and (data_dict[field] == '' or data_dict[field] is None):
+            # Replace empty values with current timestamp or appropriate default
+            if 'timestamp' in field:
+                data_dict[field] = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+            elif 'date' in field:
+                data_dict[field] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    
+    return data_dict
+
+def generate_safe_bin_data(num_bins=50):
+    bins = generate_bin_data(num_bins)
+    return [validate_data(bin_data) for bin_data in bins]
+
+def generate_safe_citizen_report(bin_id):
+    report = generate_citizen_report(bin_id)
+    return validate_data(report)
+
+if __name__ == "__main__":
+    bins = generate_safe_bin_data(5)
+    reports = [generate_safe_citizen_report(bin['bin_id']) for bin in bins[:3]]
+    
+    print("Sample bins:")
+    for bin_data in bins:
+        print(f"  {bin_data['bin_id']}: {bin_data['timestamp'] if 'timestamp' in bin_data else 'N/A'}")
+    
+    print("\nSample reports:")
+    for report in reports:
+        print(f"  {report['report_id']}: {report['timestamp']}")
