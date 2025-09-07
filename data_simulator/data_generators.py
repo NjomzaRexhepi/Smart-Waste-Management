@@ -1,6 +1,6 @@
 from faker import Faker
 import random
-from datetime import datetime
+from datetime import datetime, date, timezone
 
 fake = Faker()
 
@@ -22,8 +22,8 @@ def generate_bin_data(num_bins=50):
             "bin_id": f"bin-{i:03d}",
             "type": random.choice(["street", "residential", "commercial", "overflow"]),
             "capacity_kg": random.choice([60, 120, 240, 500]),
-            "installation_date": fake.date_between(start_date='-2y', end_date='today'),
-            "last_maintenance": fake.date_between(start_date='-6m', end_date='today'),
+            "installation_date": fake.date_time_between(start_date='-2y', end_date='now', tzinfo=timezone.utc),
+            "last_maintenance": fake.date_time_between(start_date='-6m', end_date='now', tzinfo=timezone.utc),
             "location": location,
             "status": "active"
         })
