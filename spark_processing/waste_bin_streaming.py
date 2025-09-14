@@ -7,6 +7,14 @@ from pyspark.sql.functions import (
 from pyspark.sql.types import (
     StructType, StringType, DoubleType, IntegerType, BooleanType, DateType, TimestampType
 )
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 from pyspark.sql.functions import try_to_timestamp
 
 # -----------------------------
@@ -20,6 +28,48 @@ TEMPERATURE_ALARM = 60.0
 # -----------------------------
 os.environ["HADOOP_HOME"] = os.getenv("HADOOP_HOME", r"C:\hadoop-3.3.6")
 os.environ["PATH"] += f";{os.environ['HADOOP_HOME']}\\bin"
+
+EMAIL_CONFIG = {
+    'smtp_server': 'smtp.gmail.com',
+    'smtp_port': 587,
+    'username': 'test17@gmail.com',  
+    'password': '',
+    'recipient': 'test@gmail.com'
+}
+
+# -----------------------------
+# Email function (fixed)
+# -----------------------------
+def send_email_alert(alert_data):
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_CONFIG['username']
+        msg['To'] = EMAIL_CONFIG['recipient']
+        msg['Subject'] = f"URGENT: {alert_data['alarm_type']} - {alert_data['bin_id']}"
+
+        body = f"""
+Alert Details:
+- Bin ID: {alert_data['bin_id']}
+- Alert Type: {alert_data['alarm_type']}
+- Severity: {alert_data.get('severity', 'high')}
+- Timestamp: {alert_data['triggered_at']}
+- Location: https://maps.google.com/?q={alert_data.get('lat', '')},{alert_data.get('lon', '')}
+
+Please take immediate action.
+"""
+        msg.attach(MIMEText(body, 'plain'))
+
+        server = smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
+        server.starttls()
+        server.login(EMAIL_CONFIG['username'], EMAIL_CONFIG['password'])
+        server.sendmail(EMAIL_CONFIG['username'], EMAIL_CONFIG['recipient'], msg.as_string())
+        server.quit()
+
+        logger.info(f"Email alert sent for {alert_data['bin_id']}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send email: {e}")
+        return False
 
 # -----------------------------
 # Spark session with corrected packages
@@ -84,7 +134,14 @@ def process_batch_safe(df, epoch_id, keyspace, table, label):
                 .option("spark.cassandra.output.batch.size.rows", "100") \
                 .option("spark.cassandra.output.concurrent.writes", "1") \
                 .save()
-            
+                
+            # Send email alerts for alarm tables
+            if table.lower() == "alarms" or table.lower() == "sensor_alarms":
+                alerts = df.collect()
+                for row in alerts:
+                    alert_data = row.asDict()
+                    send_email_alert(alert_data)
+                    
             print(f"[{label}] Successfully wrote {cnt} rows to {keyspace}.{table}")
         else:
             print(f"[{label}] Batch {epoch_id} is empty")
