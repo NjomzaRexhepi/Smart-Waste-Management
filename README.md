@@ -8,35 +8,33 @@ Sigurohuni që keni të instaluara Docker, Zookeeper, Kafka, Cassandra dhe Spark
 
 1. Nis Zookeeper dhe Kafka (në Docker ose lokalisht)
 
-docker-compose up -d
+    `docker-compose up -d`
 
-2. Nise Simulatorin
-
-Fajlli simulator.py do të gjenerojë të dhëna nga sensorët e mbeturinave dhe do t’i dërgojë në Kafka.
+2. Nise Simulatorin: Fajlli simulator.py do të gjenerojë të dhëna nga sensorët e mbeturinave dhe do t’i dërgojë në Kafka.
 
 3. Nis Cassandra (në Docker)
-docker start cassandra
-docker exec -it cassandra cqlsh
+
+    `docker start cassandra`
+
+    `docker exec -it cassandra cqlsh`
 
 Brenda cqlsh, krijo keyspace dhe tabelën:
 
-create keyspace wastebin with replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+`create keyspace wastebin with replication = {'class': 'SimpleStrategy', 'replication_factor': 1};`
 
-use wastebin;
+`use wastebin;`
 
-create table sensor_data (
+`create table sensor_data (
     bin_id text,
     timestamp text,
     sensor_type text,
     measurement text,
     primary key (bin_id, timestamp)
-);
+);`
 
-select * from sensor_data;
+`select * from sensor_data;`
 
-5. Nis Spark Streaming
-
-Pasi Cassandra të jetë duke punuar dhe tabela të jetë krijuar, lësho punën e Spark Streaming për të lexuar të dhënat nga Kafka dhe për t’i ruajtur në Cassandra.
+5. Nis Spark Streaming: Pasi Cassandra të jetë duke punuar dhe tabela të jetë krijuar, lësho punën e Spark Streaming për të lexuar të dhënat nga Kafka dhe për t’i ruajtur në Cassandra.
 
 Camera Sensor dataset
 https://www.kaggle.com/datasets/hussainmanasi/trash-bins
