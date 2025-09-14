@@ -1,46 +1,40 @@
-# Smart-Waste-Management
+# Përshkrimi i projektit për menaxhimin e mbetjeve përmes IoT
 
-This project presents the design and simulation of an IoT-based Smart Waste Management System. It focuses on the data pipeline, architectural model, and analytical capabilities of a system intended to optimize urban waste collection. Using simulated sensor data, this project demonstrates how real-time monitoring, data processing, and decision-making can improve operational efficiency and promote environmental sustainability in a smart city context.
+Ky projekt paraqet dizajnin dhe simulimin e një Sistemi të Menaxhimit të Mbeturinave të Zgjuara bazuar në IoT. Ai fokusohet në rrjedhën e të dhënave, modelin arkitekturor dhe aftësitë analitike të një sistemi të destinuar për të optimizuar mbledhjen e mbeturinave urbane. Duke përdorur të dhëna të simuluara nga sensorët, ky projekt demonstron se si monitorimi në kohë reale, përpunimi i të dhënave dhe marrja e vendimeve mund të përmirësojnë efikasitetin operacional dhe të promovojnë qëndrueshmërinë mjedisore në kontekstin e një qyteti të zgjuar.
 
-## Start the Zookeeper
-bin\windows\zookeeper-server-start.bat config\zookeeper.properties
+## Udhëzimet për Setup
 
-## Start the Kafka
-bin\windows\kafka-server-start.bat config\server.properties
+Sigurohuni që keni të instaluara Docker, Zookeeper, Kafka, Cassandra dhe Spark.
 
-## Create the kafka-topic 
-bin\windows\kafka-topics.bat --create --topic waste-sensor-data --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+1. Nis Zookeeper dhe Kafka (në Docker ose lokalisht)
 
-## Consume messages from Kafka
-bin\windows\kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic waste-sensor-data --from-beginning
+    `docker-compose up -d`
 
-## Start the simulator
-python data_simulator\simulator.py --kafka-brokers localhost:9092 --kafka-topic waste-sensor-data
+2. Nise Simulatorin: Fajlli simulator.py do të gjenerojë të dhëna nga sensorët e mbeturinave dhe do t’i dërgojë në Kafka.
 
-## Start the spark streaming 
-python data_simulator\simulator.py --kafka-brokers localhost:9092 --interval 5
+3. Nis Cassandra (në Docker)
 
-$SPARK_HOME/bin/spark-submit \
-  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:4.0.0 \
-  spark_streaming/waste_bin_streaming.py
+    `docker start cassandra`
 
-## Start cassandra and create table
-docker start cassandra
+    `docker exec -it cassandra cqlsh`
 
-docker exec -it cassandra cqlsh
+Brenda cqlsh, krijo keyspace dhe tabelën:
 
-cqlsh> create keyspace wastebin with replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+`create keyspace wastebin with replication = {'class': 'SimpleStrategy', 'replication_factor': 1};`
 
-cqlsh> use wastebin;
+`use wastebin;`
 
-cqlsh:wastebin> create table sensor_data (bin_id text, timestamp text, sensor_type text, measurement text, primary key(bin_id, timestamp));
+`create table sensor_data (
+    bin_id text,
+    timestamp text,
+    sensor_type text,
+    measurement text,
+    primary key (bin_id, timestamp)
+);`
 
-cqlsh:wastebin> select * from sensor_data;
+`select * from sensor_data;`
 
- bin_id | timestamp | measurement | sensor_type
---------+-----------+-------------+-------------
-
-(0 rows)
+5. Nis Spark Streaming: Pasi Cassandra të jetë duke punuar dhe tabela të jetë krijuar, lësho punën e Spark Streaming për të lexuar të dhënat nga Kafka dhe për t’i ruajtur në Cassandra.
 
 Camera Sensor dataset
 https://www.kaggle.com/datasets/hussainmanasi/trash-bins
