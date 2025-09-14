@@ -1,3 +1,8 @@
+import os
+# os.environ["CASSANDRA_DRIVER_NO_EXTENSIONS"] = "1"
+# os.environ["CASSANDRA_DRIVER_EVENT_LOOP_MANAGER"] = "asyncio"
+
+from cassandra.cluster import Cluster
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -7,14 +12,13 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
 from typing import Dict, List, Optional
 
 warnings.filterwarnings('ignore')
 
 st.set_page_config(
-    page_title="IoT Waste Management System with Cassandra",
+    page_title="IoT Waste Management System Dashboard",
     page_icon="🗑️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -49,7 +53,6 @@ class CassandraConnection:
             st.error("No Cassandra connection available")
             return None
         try:
-            # Debug prints (remove in production)
             if params is not None:
                 print(f"Executing query: {query}")
                 print(f"Params: {params}")
@@ -57,10 +60,8 @@ class CassandraConnection:
                 print(f"Number of params: {len(params)}")
             
             if params is not None:
-                # Ensure params is always a tuple
                 if not isinstance(params, tuple):
                     params = tuple(params)
-                # Use prepared statement to avoid potential binding issues
                 prepared = self.session.prepare(query)
                 result = self.session.execute(prepared, params)
             else:
@@ -68,7 +69,6 @@ class CassandraConnection:
             return list(result)
         except Exception as e:
             st.error(f"Query execution failed: {str(e)}")
-            # Also print for debugging
             print(f"Failed query: {query}")
             print(f"Failed params: {params}")
             return None
