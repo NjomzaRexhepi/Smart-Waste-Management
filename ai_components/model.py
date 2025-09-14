@@ -53,6 +53,30 @@ class BinFeatures:
     season: int  # 0=Winter, 1=Spring, 2=Summer, 3=Fall
 
 class WasteAIPredictor:
+    """
+    WasteAIPredictor - AI model for smart waste bin management.
+    Purpose:
+    ----------
+    This class builds predictive models to optimize waste collection and monitor bin status.
+    It uses historical sensor data to forecast fill levels and detect anomalies, enabling
+    early interventions and efficient resource allocation.
+    Key functionalities:
+    --------------------
+    1. Predictive fill level modeling for multiple horizons (1h, 6h, 12h, 24h, 48h, 72h)
+    2. Early warnings (semi-warning) before bins reach critical fill levels
+    3. Critical alerts when bins are about to overflow
+    4. Anomaly detection for sensor malfunctions or abnormal bin behavior
+    5. Confidence scoring for predictions
+    6. Automatic model training, scaling, and evaluation
+    7. Integration with Kafka/Cassandra for real-time alerts 
+    Benefits:
+    ----------
+    - Avoid bin overflows by proactive collection scheduling
+    - Optimize waste collection routes and resource usage
+    - Detect sensor failures or abnormal patterns early
+    - Provide actionable alerts to operations team
+    """
+
     def __init__(self, cassandra_host='127.0.0.1', kafka_brokers='localhost:9092'):
         self.fill_predictor = RandomForestRegressor(n_estimators=100, random_state=42)
         self.anomaly_detector = IsolationForest(contamination=0.1, random_state=42)
