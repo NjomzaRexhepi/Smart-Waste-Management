@@ -26,7 +26,7 @@ TEMPERATURE_ALARM = 60.0
 # -----------------------------
 # Environment setup
 # -----------------------------
-os.environ["HADOOP_HOME"] = os.getenv("HADOOP_HOME", r"C:\hadoop-3.3.6")
+os.environ["HADOOP_HOME"] = os.getenv("HADOOP_HOME", r"C:\Program Files\hadoop\hadoop-3.3.6")
 os.environ["PATH"] += f";{os.environ['HADOOP_HOME']}\\bin"
 
 EMAIL_CONFIG = {
