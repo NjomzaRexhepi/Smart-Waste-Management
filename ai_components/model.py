@@ -1,7 +1,7 @@
 import os
 os.environ["CASSANDRA_DRIVER_NO_EXTENSIONS"] = "1"
 # Removed asyncio driver, unnecessary for sync code
-# os.environ["CASSANDRA_DRIVER_EVENT_LOOP_MANAGER"] = "asyncio"
+os.environ["CASSANDRA_DRIVER_EVENT_LOOP_MANAGER"] = "asyncio"
 
 import numpy as np
 import pandas as pd
@@ -182,28 +182,58 @@ class WasteAIPredictor:
         print(f"MAE: {mean_absolute_error(y_test, y_pred):.2f}, RMSE: {np.sqrt(mean_squared_error(y_test, y_pred)):.2f}")
         self.model_trained = True
 
-    # ---------------- FUTURE PREDICTION ----------------
-    def predict_future_fill(self, bin_id: str, sensor_data: List[Dict]):
+    # ---------------- ADVANCED FUTURE PREDICTION ----------------
+    def predict_future_fill_advanced(self, bin_id: str, sensor_data: List[Dict], horizons: List[int] = None) -> Dict[int, Dict]:
+        """
+        Predicts future fill levels for multiple time horizons with horizon-aware feature adjustment.
+        """
+        if not horizons:
+            horizons = self.PREDICTION_HORIZONS
+
+        results = {}
         features = self.extract_features(bin_id, sensor_data)
-        if not features: return None
-        X = self._features_to_array(features).reshape(1,-1)
-        X_scaled = self.scaler.transform(X)
-        predicted = self.fill_predictor.predict(X_scaled)[0]
-        return min(100, max(0, predicted))
+        if not features:
+            return {h: {"predicted_fill": None, "confidence": None} for h in horizons}
+
+        base_features = self._features_to_array(features)
+
+        for h in horizons:
+            horizon_features = base_features.copy()
+
+            # Update current fill level using fill_rate_1h
+            horizon_features[0] = min(100, max(0, features.current_fill_level + features.fill_rate_1h * h))
+            # Update hour of day
+            horizon_hour = (features.hour_of_day + h) % 24
+            horizon_features[4] = horizon_hour
+            # Update day of week if crossing midnight
+            horizon_features[5] = (features.day_of_week + (features.hour_of_day + h)//24) % 7
+
+            X_scaled = self.scaler.transform(horizon_features.reshape(1, -1))
+            predicted = self.fill_predictor.predict(X_scaled)[0]
+
+            # Estimate confidence using tree predictions
+            all_tree_preds = np.array([tree.predict(X_scaled)[0] for tree in self.fill_predictor.estimators_])
+            confidence = np.std(all_tree_preds)
+
+            predicted = min(100, max(0, predicted))
+
+            results[h] = {
+                "predicted_fill": round(predicted, 2),
+                "confidence": round(confidence, 2)
+            }
+
+        return results
 
 # ---------------- MAIN ----------------
 if __name__ == "__main__":
     predictor = WasteAIPredictor()
     data = predictor.fetch_data_from_cassandra(limit=5000)
 
-    if not data:
-        print("No Cassandra data available. Exiting.")
-        exit()
-
-    print("Training AI model...")
     predictor.train_models(data)
 
-    print("\nPredicting future fill levels:")
     for bin_id, readings in data.items():
-        predicted_fill = predictor.predict_future_fill(bin_id, readings)
-        print(f"Bin {bin_id} → Predicted fill: {predicted_fill:.1f}%")
+        future_preds = predictor.predict_future_fill_advanced(bin_id, readings)
+        print(f"Bin {bin_id} predictions:")
+        for h, pred in future_preds.items():
+            print(f"  +{h}h → Fill: {pred['predicted_fill']}%, Confidence: {pred['confidence']}")
+
