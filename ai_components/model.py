@@ -48,13 +48,12 @@ class WasteAIPredictor:
         self.PREDICTION_HORIZONS = [1, 6, 12, 24]
         self.model_trained = False
 
-        # Cassandra Connection
         try:
             self.cluster = Cluster([cassandra_host], port=cassandra_port)
             self.session = self.cluster.connect('wastebin')
-            print(f"✅ Connected to Cassandra at {cassandra_host}:{cassandra_port}, keyspace '{keyspace}'")
+            print(f"Connected to Cassandra at {cassandra_host}:{cassandra_port}, keyspace '{keyspace}'")
         except Exception as e:
-            print(f"❌ Cassandra connection error: {e}")
+            print(f"Cassandra connection error: {e}")
             self.session = None
 
     # ---------------- FETCH DATA ----------------
