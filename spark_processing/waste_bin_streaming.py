@@ -25,7 +25,7 @@ TEMPERATURE_ALARM = 60.0
 # ----------------------------------------------------
 # Environment setup
 # ----------------------------------------------------
-os.environ["HADOOP_HOME"] = os.getenv("HADOOP_HOME", r"C:\Program Files\hadoop\hadoop-3.3.6")
+os.environ["HADOOP_HOME"] = os.getenv("HADOOP_HOME", r"C:\hadoop-3.3.6")
 os.environ["PATH"] += f";{os.environ['HADOOP_HOME']}\\bin"
 
 EMAIL_CONFIG = {
@@ -39,6 +39,47 @@ EMAIL_CONFIG = {
 # ----------------------------------------------------
 # Email function (fixed)
 # ----------------------------------------------------
+import time
+from kafka import KafkaAdminClient
+from kafka.admin import NewTopic
+from kafka.errors import KafkaError
+
+def ensure_topics_exist():
+    """Ensure all required topics exist in Kafka"""
+    topics = ["bins", "sensor_data", "citizen_reports", "maintenance_events", 
+              "alarms", "performance_analytics", "route_history"]
+    
+    try:
+        admin_client = KafkaAdminClient(
+            bootstrap_servers="localhost:9092",
+            client_id='spark_admin'
+        )
+        
+        existing_topics = admin_client.list_topics()
+        topics_to_create = []
+        
+        for topic in topics:
+            if topic not in existing_topics:
+                print(f"Topic {topic} doesn't exist, creating...")
+                topics_to_create.append(NewTopic(name=topic, num_partitions=3, replication_factor=1))
+        
+        if topics_to_create:
+            admin_client.create_topics(new_topics=topics_to_create, validate_only=False)
+            print(f"Created {len(topics_to_create)} topics")
+            time.sleep(5)  # Wait for topics to be ready
+        
+        admin_client.close()
+        return True
+    except Exception as e:
+        print(f"Error ensuring topics: {e}")
+        return False
+
+# Call this before creating Spark session
+print("Checking Kafka topics...")
+if not ensure_topics_exist():
+    print("Warning: Could not verify/create topics. Proceeding anyway...")
+    time.sleep(5)
+    
 def send_email_alert(alert_data):
     try:
         msg = MIMEMultipart()
@@ -103,9 +144,11 @@ def read_kafka(topic):
         .format("kafka") \
         .option("kafka.bootstrap.servers", kafka_servers) \
         .option("subscribe", topic) \
-        .option("startingOffsets", "earliest") \
+        .option("startingOffsets", "latest") \
         .option("failOnDataLoss", "false") \
         .option("maxOffsetsPerTrigger", 1000) \
+        .option("kafka.consumer.request.timeout.ms", "20000") \
+        .option("kafka.consumer.session.timeout.ms", "10000") \
         .load() \
         .selectExpr("CAST(value AS STRING) as json_str")
 
