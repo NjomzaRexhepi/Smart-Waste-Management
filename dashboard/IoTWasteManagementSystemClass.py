@@ -14,6 +14,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from cassandra.auth import PlainTextAuthProvider
 from typing import Dict, List, Optional
+from streamlit_plotly_events import plotly_events
+import streamlit as st
 
 warnings.filterwarnings('ignore')
 
@@ -237,15 +239,82 @@ def main():
     if hasattr(st.session_state, 'waste_system') and st.session_state.waste_system:
         system = st.session_state.waste_system
 
-        # -------- Bins Overview --------
         st.subheader("📊 Bin Overview")
-        status_filter = st.selectbox("Filter by Status", ["All", "active", "inactive", "offline"])
-        bin_type_filter = st.selectbox("Filter by Type", ["All", "recycling", "organic", "general"])
+
+# -------- Filters in columns --------
+        col1, col2 = st.columns(2)
+        with col1:
+            status_filter = st.selectbox("Filter by Status", ["All", "active", "inactive", "offline"])
+        with col2:
+            bin_type_filter = st.selectbox("Filter by Type", ["All", "commercial", "street", "residential", "overflow"])
+
+        # -------- Get bins data --------
         bins_df = system.get_bins_data(status_filter=status_filter, bin_type_filter=bin_type_filter)
+
         if not bins_df.empty:
+            # Convert UUIDs and ensure lat/lng are floats
+            bins_df["bin_id"] = bins_df["bin_id"].astype(str)
+            bins_df["location_lat"] = bins_df["location_lat"].astype(float)
+            bins_df["location_lng"] = bins_df["location_lng"].astype(float)
+
+            # -------- Summary Metrics --------
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total Bins", len(bins_df))
+            col2.metric("Active", len(bins_df[bins_df['status']=='active']))
+            col3.metric("Offline", len(bins_df[bins_df['status']=='offline']))
+            col4.metric("Average Fill %", f"{bins_df['current_fill_level'].mean():.2f}")
+
+            st.divider()  # horizontal line
+
+            # -------- Data Table --------
             st.dataframe(bins_df)
+
+            # -------- Pie Chart of Bin Status --------
             fig_status = px.pie(bins_df, names='status', title="Bin Status Distribution")
-            st.plotly_chart(fig_status)
+            st.plotly_chart(fig_status, use_container_width=True)
+
+            st.divider()
+
+            # -------- Map with Clickable Bins --------
+            st.subheader("🗺️ Bin Locations on Map")
+
+            # Marker size based on fill level
+            marker_sizes = bins_df['current_fill_level'].apply(lambda x: max(20, min(x*1.5, 50)))
+
+            # Status color mapping
+            status_color_map = {'active':'green', 'inactive':'red', 'offline':'gray'}
+
+            # Hover template for clean display
+            hover_template = (
+                "<b>Bin ID:</b> %{customdata[0]}<br>"
+                "<b>Status:</b> %{customdata[1]}<br>"
+                "<b>Type:</b> %{customdata[2]}<br>"
+                "<b>Fill Level:</b> %{customdata[3]}<br>"
+                "<b>Capacity:</b> %{customdata[4]}<br>"
+                "<b>Last Maintenance:</b> %{customdata[5]}"
+            )
+
+            fig_map = go.Figure(go.Scattermapbox(
+                lat=bins_df['location_lat'],
+                lon=bins_df['location_lng'],
+                mode='markers',
+                marker=go.scattermapbox.Marker(
+                    size=marker_sizes,
+                    color=bins_df['status'].map(status_color_map),
+                    opacity=0.85,
+                ),
+                customdata=bins_df[['bin_id', 'status', 'type', 'current_fill_level', 'capacity', 'last_maintenance_date']],
+                hovertemplate=hover_template
+            ))
+
+            fig_map.update_layout(
+                mapbox_style='open-street-map',
+                mapbox_zoom=13,
+                mapbox_center={"lat": bins_df['location_lat'].mean(), "lon": bins_df['location_lng'].mean()},
+                height=600
+            )
+
+            st.plotly_chart(fig_map, use_container_width=True)
         else:
             st.info("No bin data available.")
 
