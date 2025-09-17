@@ -74,12 +74,11 @@ def ensure_topics_exist():
         print(f"Error ensuring topics: {e}")
         return False
 
-# Call this before creating Spark session
 print("Checking Kafka topics...")
 if not ensure_topics_exist():
     print("Warning: Could not verify/create topics. Proceeding anyway...")
     time.sleep(5)
-    
+
 def send_email_alert(alert_data):
     try:
         msg = MIMEMultipart()
