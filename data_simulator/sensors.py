@@ -19,13 +19,12 @@ class UltrasonicSensor:
         self.sensor_type = "fill_level"
 
     def measure(self):
-        # daily pattern (faster fill at certain hours)
         hour = datetime.now().hour
         base_increase = 1.0 if 6 <= hour <= 9 or 18 <= hour <= 22 else 0.3
         fill_increase = random.uniform(base_increase, base_increase * 3.0)
 
         if random.random() < 0.02:
-            self.fill_level = 0.0  # bin emptied
+            self.fill_level = 0.0 
         else:
             self.fill_level = min(100.0, self.fill_level + fill_increase)
 

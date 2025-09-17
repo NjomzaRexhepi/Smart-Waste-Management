@@ -20,7 +20,6 @@ def generate_bin_data(num_bins=50):
     for i in range(num_bins):
         location = generate_bin_location()
         
-        # Ensure dates are properly formatted
         installation_date = fake.date_between(start_date='-2y', end_date='today')
         last_maintenance = fake.date_between(start_date='-6m', end_date='today')
         
@@ -45,8 +44,8 @@ def generate_citizen_report(bin_id):
     
     return {
         "report_id": f"report-{timestamp.strftime('%Y%m%d%H%M%S%f')}",
-        "bin_id": bin_id if bin_id else str(uuid.uuid4()),  # Ensure bin_id is not empty
-        "timestamp": timestamp.strftime('%Y-%m-%d %H:%M:%S'),  # Standard SQL timestamp format
+        "bin_id": bin_id if bin_id else str(uuid.uuid4()),  
+        "timestamp": timestamp.strftime('%Y-%m-%d %H:%M:%S'),  
         "issue_type": random.choice(issues),
         "description": fake.sentence(),
         "reporter_id": f"citizen-{random.randint(1000, 9999)}",
@@ -59,7 +58,6 @@ def validate_data(data_dict):
     
     for field in critical_fields:
         if field in data_dict and (data_dict[field] == '' or data_dict[field] is None):
-            # Replace empty values with current timestamp or appropriate default
             if 'timestamp' in field:
                 data_dict[field] = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
             elif 'date' in field:

@@ -17,18 +17,15 @@ class AlertSystem:
             'password': 'your-app-password'
         }
         
-        # Kafka consumer for alarms
         self.consumer = KafkaConsumer(
             'alarms',
             bootstrap_servers=['localhost:9092'],
             value_deserializer=lambda m: json.loads(m.decode('utf-8'))
         )
         
-        # Alert thresholds and cooldown periods
-        self.alert_cooldown = {}  # Track last alert time for each bin
-        self.cooldown_period = 300  # 5 minutes cooldown
+        self.alert_cooldown = {}  
+        self.cooldown_period = 300  # 5 minutes 
         
-        # Setup logging
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
     
@@ -83,14 +80,12 @@ class AlertSystem:
         bin_id = alert_data['bin_id']
         alarm_type = alert_data['alarm_type']
         
-        # Check cooldown to prevent spam
         if not self.check_alert_cooldown(bin_id):
             self.logger.info(f"Alert for {bin_id} skipped due to cooldown")
             return
         
         self.logger.info(f"Processing alert for {bin_id}: {alarm_type}")
         
-        # Route alerts based on type and severity
         if alarm_type == 'High Fill Level':
             # High priority - send all types of alerts
             self.send_email_alert(alert_data)
@@ -124,11 +119,9 @@ class AlertSystem:
                 alert_data = message.value
                 self.logger.info(f"Received alert: {alert_data}")
                 
-                # Add timestamp if not present
                 if 'timestamp' not in alert_data:
                     alert_data['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 
-                # Process the alert
                 self.process_alert(alert_data)
                 
         except KeyboardInterrupt:
@@ -154,11 +147,9 @@ class AlertSystem:
 
 
 if __name__ == "__main__":
-    # Initialize and start the alert system
     alert_system = AlertSystem()
     
-    # Uncomment to send a test alert
     # alert_system.send_test_alert()
     
-    # Start listening for real alerts
+  
     alert_system.start_listening()

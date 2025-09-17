@@ -12,20 +12,19 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import logging
 
-# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 from pyspark.sql.functions import try_to_timestamp
 
-# -----------------------------
+# ----------------------------------------------------
 # Configurable thresholds
-# -----------------------------
+# ----------------------------------------------------
 FILL_LEVEL_ALARM = 90.0
 TEMPERATURE_ALARM = 60.0
 
-# -----------------------------
+# ----------------------------------------------------
 # Environment setup
-# -----------------------------
+# ----------------------------------------------------
 os.environ["HADOOP_HOME"] = os.getenv("HADOOP_HOME", r"C:\Program Files\hadoop\hadoop-3.3.6")
 os.environ["PATH"] += f";{os.environ['HADOOP_HOME']}\\bin"
 
@@ -37,9 +36,9 @@ EMAIL_CONFIG = {
     'recipient': 'test@gmail.com'
 }
 
-# -----------------------------
+# ----------------------------------------------------
 # Email function (fixed)
-# -----------------------------
+# ----------------------------------------------------
 def send_email_alert(alert_data):
     try:
         msg = MIMEMultipart()
@@ -71,9 +70,9 @@ Please take immediate action.
         logger.error(f"Failed to send email: {e}")
         return False
 
-# -----------------------------
+# --------------------------------------------------------
 # Spark session with corrected packages
-# -----------------------------
+# --------------------------------------------------------
 spark = SparkSession.builder \
     .appName("SmartWasteStreaming") \
     .config("spark.jars.packages",
@@ -88,16 +87,16 @@ spark = SparkSession.builder \
 spark.sparkContext.setLogLevel("WARN")
 print("Spark session created successfully")
 
-# -----------------------------
+# ------------------------------------------------------
 # UUID generator
-# -----------------------------
+# ------------------------------------------------------
 def generate_uuid():
     return str(uuid.uuid4())
 uuid_udf = udf(generate_uuid, StringType())
 
-# -----------------------------
+# ------------------------------------------------------
 # Kafka reader helper
-# -----------------------------
+# ------------------------------------------------------
 def read_kafka(topic):
     kafka_servers = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
     return spark.readStream \
@@ -110,20 +109,18 @@ def read_kafka(topic):
         .load() \
         .selectExpr("CAST(value AS STRING) as json_str")
 
-# -----------------------------
+# ------------------------------------------------------
 # Enhanced batch processing with error handling
-# -----------------------------
+# ------------------------------------------------------
 def process_batch_safe(df, epoch_id, keyspace, table, label):
     try:
         cnt = df.count()
         if cnt > 0:
             print(f"[{label}] Processing batch {epoch_id} with {cnt} rows")
             
-            # Show sample data for debugging
             print(f"[{label}] Sample data:")
             df.show(3, truncate=False)
             
-            # Write to Cassandra with proper options
             df.write \
                 .format("org.apache.spark.sql.cassandra") \
                 .mode("append") \
@@ -135,7 +132,6 @@ def process_batch_safe(df, epoch_id, keyspace, table, label):
                 .option("spark.cassandra.output.concurrent.writes", "1") \
                 .save()
                 
-            # Send email alerts for alarm tables
             if table.lower() == "alarms" or table.lower() == "sensor_alarms":
                 alerts = df.collect()
                 for row in alerts:
@@ -150,11 +146,10 @@ def process_batch_safe(df, epoch_id, keyspace, table, label):
         print(f"[{label}] Error in batch {epoch_id}: {str(e)}")
         import traceback
         traceback.print_exc()
-        # Don't re-raise to prevent stream termination
 
-# -----------------------------
+# ------------------------------------------------------
 # Schemas matching simulator output
-# -----------------------------
+# -----------------------------------------------------
 schema_bins = StructType() \
     .add("bin_id", StringType()) \
     .add("location_lat", DoubleType()) \
@@ -221,9 +216,9 @@ schema_routes = StructType() \
     .add("service_date", StringType()) \
     .add("collection_status", StringType())
 
-# -----------------------------
+# ------------------------------------------------------
 # Helper function for timestamp parsing
-# -----------------------------
+# ------------------------------------------------------
 def parse_timestamp_safe(timestamp_col):
     """Safely parse timestamps with multiple format attempts"""
     return coalesce(
@@ -237,9 +232,9 @@ def parse_timestamp_safe(timestamp_col):
         to_timestamp(timestamp_col)
     )
 
-# -----------------------------
+# ------------------------------------------------------
 # 1) Bins stream
-# -----------------------------
+# ------------------------------------------------------
 print("Setting up bins stream...")
 bins_df = read_kafka("bins") \
     .select(from_json(col("json_str"), schema_bins).alias("data")) \
@@ -261,9 +256,9 @@ bins_query = bins_df.writeStream \
     .trigger(processingTime='30 seconds') \
     .start()
 
-# -----------------------------
+# ------------------------------------------------------
 # 2) Sensor stream
-# -----------------------------
+# ------------------------------------------------------
 print("Setting up sensor stream...")
 sensor_df = read_kafka("sensor_data") \
     .select(from_json(col("json_str"), schema_sensor).alias("data")) \
@@ -279,9 +274,9 @@ sensor_query = sensor_df.writeStream \
     .trigger(processingTime='15 seconds') \
     .start()
 
-# -----------------------------
+# ------------------------------------------------------
 # 3) Citizen reports
-# -----------------------------
+# ------------------------------------------------------
 print("Setting up citizen reports stream...")
 reports_df = read_kafka("citizen_reports") \
     .select(from_json(col("json_str"), schema_reports).alias("data")) \
@@ -300,9 +295,9 @@ reports_query = reports_df.writeStream \
     .trigger(processingTime='30 seconds') \
     .start()
 
-# -----------------------------
+# ------------------------------------------------------
 # 4) Maintenance events
-# -----------------------------
+# ------------------------------------------------------
 print("Setting up maintenance stream...")
 maintenance_df = read_kafka("maintenance_events") \
     .select(from_json(col("json_str"), schema_maintenance).alias("data")) \
@@ -317,9 +312,9 @@ maintenance_query = maintenance_df.writeStream \
     .trigger(processingTime='30 seconds') \
     .start()
 
-# -----------------------------
+# ------------------------------------------------------
 # 5) Alarms stream
-# -----------------------------
+# ------------------------------------------------------
 print("Setting up alarms stream...")
 alarms_df = read_kafka("alarms") \
     .select(from_json(col("json_str"), schema_alarms).alias("data")) \
@@ -338,9 +333,9 @@ alarms_query = alarms_df.writeStream \
     .trigger(processingTime='20 seconds') \
     .start()
 
-# -----------------------------
+# ------------------------------------------------------
 # 6) Performance analytics
-# -----------------------------
+# ------------------------------------------------------
 print("Setting up performance analytics stream...")
 performance_df = read_kafka("performance_analytics") \
     .select(from_json(col("json_str"), schema_performance).alias("data")) \
@@ -357,9 +352,9 @@ performance_query = performance_df.writeStream \
     .trigger(processingTime='60 seconds') \
     .start()
 
-# -----------------------------
+# ------------------------------------------------------
 # 7) Route history
-# -----------------------------
+# ------------------------------------------------------
 print("Setting up routes stream...")
 routes_df = read_kafka("route_history") \
     .select(from_json(col("json_str"), schema_routes).alias("data")) \
@@ -374,9 +369,9 @@ routes_query = routes_df.writeStream \
     .trigger(processingTime='60 seconds') \
     .start()
 
-# -----------------------------
+# ------------------------------------------------------
 # 8) Real-time alarm detection from sensor data
-# -----------------------------
+# ------------------------------------------------------
 print("Setting up real-time alarm detection...")
 sensor_alarms_df = sensor_df.filter(
     (col("fill_level") >= FILL_LEVEL_ALARM) | 
@@ -405,9 +400,9 @@ sensor_alarms_query = sensor_alarms_df.writeStream \
     .trigger(processingTime='20 seconds') \
     .start()
 
-# -----------------------------
+# ------------------------------------------------------
 # Monitor and manage streams
-# -----------------------------
+# ------------------------------------------------------
 def print_stream_status():
     active_streams = spark.streams.active
     print(f"\n=== Active Streams: {len(active_streams)} ===")
@@ -431,10 +426,8 @@ try:
     print("Press Ctrl+C to stop all streams")
     print("="*60)
     
-    # Print initial status
     print_stream_status()
     
-    # Wait for termination
     spark.streams.awaitAnyTermination()
     
 except KeyboardInterrupt:
