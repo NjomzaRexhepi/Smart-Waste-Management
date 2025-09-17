@@ -14,6 +14,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from cassandra.auth import PlainTextAuthProvider
 from typing import Dict, List, Optional
+from streamlit_plotly_events import plotly_events
 
 warnings.filterwarnings('ignore')
 
@@ -239,13 +240,56 @@ def main():
 
         # -------- Bins Overview --------
         st.subheader("📊 Bin Overview")
+
         status_filter = st.selectbox("Filter by Status", ["All", "active", "inactive", "offline"])
         bin_type_filter = st.selectbox("Filter by Type", ["All", "recycling", "organic", "general"])
+
         bins_df = system.get_bins_data(status_filter=status_filter, bin_type_filter=bin_type_filter)
+
         if not bins_df.empty:
+            bins_df["bin_id"] = bins_df["bin_id"].astype(str)
+
+            bins_df["location_lat"] = bins_df["location_lat"].astype(float)
+            bins_df["location_lng"] = bins_df["location_lng"].astype(float)
+
             st.dataframe(bins_df)
+
             fig_status = px.pie(bins_df, names='status', title="Bin Status Distribution")
             st.plotly_chart(fig_status)
+
+            st.subheader("🗺️ Bin Locations on Map")
+
+            status_color_map = {'active':'green', 'inactive':'red', 'offline':'gray'}
+
+            marker_sizes = bins_df['current_fill_level'].apply(lambda x: max(20, min(x*1.5, 50)))
+
+            fig_map = go.Figure()
+
+            fig_map.add_trace(go.Scattermapbox(
+                lat=bins_df['location_lat'],
+                lon=bins_df['location_lng'],
+                mode='markers',
+                marker=go.scattermapbox.Marker(
+                    size=marker_sizes,
+                    color=bins_df['status'].map(status_color_map),
+                    opacity=0.9
+                ),
+                text=bins_df.apply(
+                    lambda row: f"Bin ID: {row['bin_id']}<br>Status: {row['status']}<br>Type: {row['type']}<br>Fill Level: {row['current_fill_level']}",
+                    axis=1
+                ),
+                hoverinfo='text'
+            ))
+
+            fig_map.update_layout(
+                mapbox_style='open-street-map',
+                mapbox_zoom=13,
+                mapbox_center={"lat": bins_df['location_lat'].mean(), "lon": bins_df['location_lng'].mean()},
+                height=600
+            )
+
+            st.plotly_chart(fig_map, use_container_width=True)
+
         else:
             st.info("No bin data available.")
 
