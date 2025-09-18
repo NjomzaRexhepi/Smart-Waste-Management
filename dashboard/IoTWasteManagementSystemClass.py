@@ -16,6 +16,9 @@ from cassandra.auth import PlainTextAuthProvider
 from typing import Dict, List, Optional
 from streamlit_plotly_events import plotly_events
 import streamlit as st
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "ai_components")))
+from model import WasteAIPredictor
 
 warnings.filterwarnings('ignore')
 
@@ -239,6 +242,10 @@ def main():
     if hasattr(st.session_state, 'waste_system') and st.session_state.waste_system:
         system = st.session_state.waste_system
 
+        predictor = WasteAIPredictor()
+        sensor_data_all = predictor.fetch_data_from_cassandra(limit=5000)
+        predictor.train_models(sensor_data_all)
+
         st.subheader("📊 Bin Overview")
 
 # -------- Filters in columns --------
@@ -397,6 +404,68 @@ def main():
             st.json(attention_data)
         else:
             st.info("No bins needing attention.")
+
+        # -------- Predictions Section --------
+        st.subheader("🤖 Bin Fill Level Predictions")
+
+        if not sensor_data_all:
+            st.warning("No sensor data available for predictions.")
+        else:
+            # Select a bin for prediction
+            selected_bin_pred = st.selectbox("Select a bin for prediction", list(sensor_data_all.keys()))
+
+            if selected_bin_pred:
+                readings = sensor_data_all[selected_bin_pred]
+
+                # Get predictions
+                future_preds = predictor.predict_future_fill_advanced(selected_bin_pred, readings)
+
+                if not future_preds:
+                    st.info("No predictions available for this bin.")
+                else:
+                    # Convert to DataFrame for plotting
+                    preds_df = pd.DataFrame([
+                        {"Horizon (h)": h,
+                        "Predicted Fill (%)": pred["predicted_fill"],
+                        "Confidence ±": pred["confidence"]}
+                        for h, pred in future_preds.items()
+                    ])
+
+                    # Show table
+                    st.dataframe(preds_df)
+
+                    # Plot predictions
+                    fig_preds = go.Figure()
+
+                    fig_preds.add_trace(go.Scatter(
+                        x=preds_df["Horizon (h)"],
+                        y=preds_df["Predicted Fill (%)"],
+                        mode='lines+markers',
+                        name="Predicted Fill",
+                        line=dict(color="royalblue", width=3)
+                    ))
+
+                    # Confidence band
+                    fig_preds.add_trace(go.Scatter(
+                        x=preds_df["Horizon (h)"].tolist() + preds_df["Horizon (h)"].tolist()[::-1],
+                        y=(preds_df["Predicted Fill (%)"] + preds_df["Confidence ±"]).tolist() +
+                        (preds_df["Predicted Fill (%)"] - preds_df["Confidence ±"]).tolist()[::-1],
+                        fill='toself',
+                        fillcolor='rgba(135,206,250,0.2)',
+                        line=dict(color='rgba(255,255,255,0)'),
+                        hoverinfo="skip",
+                        showlegend=True,
+                        name="Confidence Band"
+                    ))
+
+                    fig_preds.update_layout(
+                        title=f"Predicted Fill Levels for Bin {selected_bin_pred}",
+                        xaxis_title="Prediction Horizon (hours ahead)",
+                        yaxis_title="Fill Level (%)",
+                        yaxis=dict(range=[0, 100])
+                    )
+
+                    st.plotly_chart(fig_preds, use_container_width=True)
 
     else:
         st.info("👈 Please connect to Cassandra to view data.")
