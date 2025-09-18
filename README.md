@@ -35,6 +35,3 @@ Brenda cqlsh, krijo keyspace dhe tabelën:
 `select * from sensor_data;`
 
 5. Nis Spark Streaming: Pasi Cassandra të jetë duke punuar dhe tabela të jetë krijuar, lësho punën e Spark Streaming për të lexuar të dhënat nga Kafka dhe për t’i ruajtur në Cassandra.
-
-Camera Sensor dataset
-https://www.kaggle.com/datasets/hussainmanasi/trash-bins
