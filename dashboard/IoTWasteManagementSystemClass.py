@@ -189,32 +189,6 @@ class CassandraWasteManagementSystem:
             return pd.DataFrame(result)
         return pd.DataFrame()
 
-    def get_bins_needing_attention(self) -> Dict:
-        bins_df = self.get_bins_data()
-        if bins_df.empty:
-            return {}
-        attention_data = {'high_fill_bins': [], 'offline_bins': [], 'maintenance_due': []}
-
-        thirty_days_ago = datetime.now() - timedelta(days=30)
-
-        for _, row in bins_df.iterrows():
-            if row['current_fill_level'] >= 85:
-                attention_data['high_fill_bins'].append({
-                    'bin_id': str(row['bin_id']),
-                    'fill_level': row['current_fill_level']
-                })
-            if row['status'] != 'active':
-                attention_data['offline_bins'].append({
-                    'bin_id': str(row['bin_id']),
-                    'status': row['status']
-                })
-            if row['last_maintenance_date'] and row['last_maintenance_date'] < thirty_days_ago:
-                attention_data['maintenance_due'].append({
-                    'bin_id': str(row['bin_id']),
-                    'last_maintenance': row['last_maintenance_date'].strftime('%Y-%m-%d')
-                })
-        return attention_data
-
 # -------------------- Streamlit Dashboard --------------------
 def main():
     st.title("🗑️ IoT Waste Management System - Cassandra Edition")
@@ -248,7 +222,7 @@ def main():
 
         st.subheader("📊 Bin Overview")
 
-# -------- Filters in columns --------
+        # -------- Filters in columns --------
         col1, col2 = st.columns(2)
         with col1:
             status_filter = st.selectbox("Filter by Status", ["All", "active", "inactive", "offline"])
@@ -259,7 +233,6 @@ def main():
         bins_df = system.get_bins_data(status_filter=status_filter, bin_type_filter=bin_type_filter)
 
         if not bins_df.empty:
-            # Convert UUIDs and ensure lat/lng are floats
             bins_df["bin_id"] = bins_df["bin_id"].astype(str)
             bins_df["location_lat"] = bins_df["location_lat"].astype(float)
             bins_df["location_lng"] = bins_df["location_lng"].astype(float)
@@ -271,7 +244,7 @@ def main():
             col3.metric("Offline", len(bins_df[bins_df['status']=='offline']))
             col4.metric("Average Fill %", f"{bins_df['current_fill_level'].mean():.2f}")
 
-            st.divider()  # horizontal line
+            st.divider()
 
             # -------- Data Table --------
             st.dataframe(bins_df)
@@ -285,13 +258,10 @@ def main():
             # -------- Map with Clickable Bins --------
             st.subheader("🗺️ Bin Locations on Map")
 
-            # Marker size based on fill level
             marker_sizes = bins_df['current_fill_level'].apply(lambda x: max(20, min(x*1.5, 50)))
 
-            # Status color mapping
             status_color_map = {'active':'green', 'inactive':'red', 'offline':'gray'}
 
-            # Hover template for clean display
             hover_template = (
                 "<b>Bin ID:</b> %{customdata[0]}<br>"
                 "<b>Status:</b> %{customdata[1]}<br>"
@@ -397,33 +367,22 @@ def main():
         else:
             st.info("No performance data available.")
 
-        # -------- Bins Needing Attention --------
-        st.subheader("⚠️ Bins Needing Attention")
-        attention_data = system.get_bins_needing_attention()
-        if attention_data:
-            st.json(attention_data)
-        else:
-            st.info("No bins needing attention.")
-
         # -------- Predictions Section --------
         st.subheader("🤖 Bin Fill Level Predictions")
 
         if not sensor_data_all:
             st.warning("No sensor data available for predictions.")
         else:
-            # Select a bin for prediction
             selected_bin_pred = st.selectbox("Select a bin for prediction", list(sensor_data_all.keys()))
 
             if selected_bin_pred:
                 readings = sensor_data_all[selected_bin_pred]
 
-                # Get predictions
                 future_preds = predictor.predict_future_fill_advanced(selected_bin_pred, readings)
 
                 if not future_preds:
                     st.info("No predictions available for this bin.")
                 else:
-                    # Convert to DataFrame for plotting
                     preds_df = pd.DataFrame([
                         {"Horizon (h)": h,
                         "Predicted Fill (%)": pred["predicted_fill"],
@@ -431,10 +390,8 @@ def main():
                         for h, pred in future_preds.items()
                     ])
 
-                    # Show table
                     st.dataframe(preds_df)
 
-                    # Plot predictions
                     fig_preds = go.Figure()
 
                     fig_preds.add_trace(go.Scatter(
@@ -445,7 +402,6 @@ def main():
                         line=dict(color="royalblue", width=3)
                     ))
 
-                    # Confidence band
                     fig_preds.add_trace(go.Scatter(
                         x=preds_df["Horizon (h)"].tolist() + preds_df["Horizon (h)"].tolist()[::-1],
                         y=(preds_df["Predicted Fill (%)"] + preds_df["Confidence ±"]).tolist() +
